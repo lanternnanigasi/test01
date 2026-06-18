@@ -670,7 +670,7 @@ importBtn.addEventListener('click', async () => {
     }
 
     try {
-        if (db) {
+        if (auth && auth.currentUser) {
             const colRef = collection(db, "users", auth.currentUser.uid, "companies");
             for (const item of parsedData) {
                 item.createdAt = new Date().toISOString();
@@ -706,7 +706,7 @@ clearDataBtn.addEventListener('click', async () => {
         return;
     }
     try {
-        if (db) {
+        if (auth && auth.currentUser) {
             const colRef = collection(db, "users", auth.currentUser.uid, "companies");
             const snapshot = await getDocs(colRef);
             for (const docSnapshot of snapshot.docs) {
@@ -1407,7 +1407,7 @@ function processMetaData(dataList) {
 }
 
 function loadData() {
-    if (db) {
+    if (auth && auth.currentUser) {
         const colRef = collection(db, "users", auth.currentUser.uid, "companies");
         unsubscribeSnapshot = onSnapshot(colRef, (snapshot) => {
             const data = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
