@@ -244,7 +244,10 @@ function parseMarkdownTable(markdown) {
             const cleanLine = line.replace(/^\||\|$/g, '');
             const cells = cleanLine.split('|').map(c => c.replace(/\*\*/g, '').trim());
             if (cells.length >= 2) {
-                rowData[cells[0]] = cells.slice(1).join('|').trim();
+                const cleanH = cells[0].trim();
+                if (cleanH && !/^[-:\s]+$/.test(cleanH) && !['項目', '調査結果', '内容'].includes(cleanH)) {
+                    rowData[cleanH] = cells.slice(1).join('|').trim();
+                }
             }
         }
         return [rowData];
@@ -260,7 +263,11 @@ function parseMarkdownTable(markdown) {
             if (cells.length >= headers.length) {
                 const rowData = {};
                 headers.forEach((header, index) => {
-                    rowData[header] = cells[index] || "";
+                    const cleanH = header.trim();
+                    if (!cleanH || /^[-:\s]+$/.test(cleanH) || ['項目', '調査結果', '内容'].includes(cleanH)) {
+                        return; // 不要なキーは保存しない
+                    }
+                    rowData[cleanH] = cells[index] || "";
                 });
                 data.push(rowData);
             }
@@ -476,12 +483,15 @@ function renderTable(data) {
         return;
     }
 
+    const ignoreHeaders = ['id', 'createdAt', 'userId', '会社名', '企業名', 'isHidden', 'memo', '_meta', '項目', '調査結果', '内容'];
     const headerSet = new Set();
     data.forEach(item => {
         Object.keys(item).forEach(k => {
-            if (!['id', 'createdAt', 'userId', '会社名', '企業名', 'isHidden', 'memo', '_meta'].includes(k)) {
-                headerSet.add(k);
-            }
+            const cleanK = k.trim();
+            if (!cleanK) return; // 空白キーを除外
+            if (ignoreHeaders.includes(cleanK)) return; // 特定の不要なキーを除外
+            if (/^[-:\s]+$/.test(cleanK)) return; // '---' や '-' などの記号だけのキーを除外
+            headerSet.add(cleanK);
         });
     });
 
