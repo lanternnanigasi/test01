@@ -561,11 +561,11 @@ generateFormatBtn.addEventListener('click', async () => {
     }
     localStorage.setItem('formatBuilderData', dataStr);
 
-    const headers = ["企業名", ...validItems.map(d => d.name)].join(" | ");
-    const dividers = ["---", ...validItems.map(() => "---")].join(" | ");
+    const headers = ["企業名", ...validItems.map(d => d.name)].join(" / ");
+    const dividers = ["---", ...validItems.map(() => "---")].join(" / ");
     
     // 冒頭
-    let prompt = `以下の企業情報を調査・整理し、【必ずMarkdownテーブル形式のみ】で出力してください。見やすい表形式などのリッチテキスト装飾は禁じます。\n\n■ 抽出項目とルール\n- 企業名\n`;
+    let prompt = `以下の企業情報を調査・整理し、指定のテキストフォーマットで出力してください。見やすい表形式などのリッチテキスト装飾は【厳禁】です。\n\n■ 抽出項目とルール\n- 企業名\n`;
 
     let varCount = 1;
     validItems.forEach(item => {
@@ -590,11 +590,11 @@ generateFormatBtn.addEventListener('click', async () => {
     });
 
     // 中間
-    prompt += `\n人間が見やすい表などの出力ではなく、下に示すマークダウン形式でのみ出力せよ。\n\n`;
-    prompt += `出力フォーマット：\n| ${headers} |\n| ${dividers} |\n| (対象企業名) | (調査内容) | ... |\n\n`;
+    prompt += `\n人間が見やすい表などの出力ではなく、下に示すテキストフォーマットでのみ出力せよ。\n\n`;
+    prompt += `出力フォーマット：\n/ ${headers} /\n/ ${dividers} /\n/ (対象企業名) / (調査内容) / ... /\n\n`;
     
     // 末尾
-    prompt += `必ず「|」で情報が整理されたマークダウンの記法で、文字によってのみ出力すること。表の状態で出力してはならない。`;
+    prompt += `必ず「/」で情報が区切られたテキスト記法で、文字によってのみ出力すること。Markdownの表として出力してはならない。`;
     
     formatOutput.value = prompt;
 });
@@ -613,32 +613,39 @@ function parseMarkdownTable(markdown) {
     const lines = markdown.trim().split('\n');
     
     let separatorIndex = -1;
+    let delimiter = '|';
     for (let i = 0; i < lines.length; i++) {
-        if (lines[i].replace(/\s/g, '').match(/^\|[-:|]+\|$/)) {
+        // match |---| or /---/
+        if (lines[i].replace(/\s/g, '').match(/^[\|/][-:\|/]+[\|/]$/)) {
             separatorIndex = i;
+            delimiter = lines[i].trim().startsWith('/') ? '/' : '|';
             break;
         }
     }
     
     if (separatorIndex <= 0) {
-        throw new Error("テーブルのヘッダー行、または区切り行（|---| 等）が見つかりません。AIがフォーマットを省略してデータから出力しています。「ヘッダーを省略しない」ようAIに指示してください。");
+        throw new Error("フォーマットのヘッダー行、または区切り行（/---/ 等）が見つかりません。AIがフォーマットを省略してデータから出力しています。「ヘッダーを省略しない」ようAIに指示してください。");
     }
 
-    const headerLine = lines[separatorIndex - 1].trim().replace(/^\||\|$/g, '');
-    const headers = headerLine.split('|').map(h => h.replace(/\*\*/g, '').trim()).filter(h => h);
+    const escapeRegex = (s) => s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const escapedDelim = escapeRegex(delimiter);
+    const stripRegex = new RegExp(`^${escapedDelim}|${escapedDelim}$`, 'g');
+
+    const headerLine = lines[separatorIndex - 1].trim().replace(stripRegex, '');
+    const headers = headerLine.split(delimiter).map(h => h.replace(/\*\*/g, '').trim()).filter(h => h);
     
     if (headers.length === 2 && (headers[0] === '項目' || headers[1] === '調査結果')) {
         const rowData = {};
         for (let i = separatorIndex + 1; i < lines.length; i++) {
             let line = lines[i].trim();
-            if (!line.startsWith('|')) continue;
+            if (!line.startsWith(delimiter)) continue;
             
-            const cleanLine = line.replace(/^\||\|$/g, '');
-            const cells = cleanLine.split('|').map(c => c.replace(/\*\*/g, '').trim());
+            const cleanLine = line.replace(stripRegex, '');
+            const cells = cleanLine.split(delimiter).map(c => c.replace(/\*\*/g, '').trim());
             if (cells.length >= 2) {
                 const cleanH = cells[0].trim();
                 if (cleanH && !/^[-:\s]+$/.test(cleanH) && !['項目', '調査結果', '内容'].includes(cleanH)) {
-                    rowData[cleanH] = cells.slice(1).join('|').trim();
+                    rowData[cleanH] = cells.slice(1).join(delimiter).trim();
                 }
             }
         }
@@ -647,10 +654,10 @@ function parseMarkdownTable(markdown) {
         const data = [];
         for (let i = separatorIndex + 1; i < lines.length; i++) {
             let line = lines[i].trim();
-            if (!line.startsWith('|')) continue;
+            if (!line.startsWith(delimiter)) continue;
             
-            const cleanLine = line.replace(/^\||\|$/g, '');
-            const cells = cleanLine.split('|').map(c => c.replace(/\*\*/g, '').trim());
+            const cleanLine = line.replace(stripRegex, '');
+            const cells = cleanLine.split(delimiter).map(c => c.replace(/\*\*/g, '').trim());
             
             if (cells.length >= headers.length) {
                 const rowData = {};
