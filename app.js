@@ -38,6 +38,7 @@ const showHiddenCheckbox = document.getElementById('show-hidden-checkbox');
 const manageHiddenColumnsBtn = document.getElementById('manage-hidden-columns-btn');
 
 const formatItemsInput = document.getElementById('format-items-input');
+const formatRulesInput = document.getElementById('format-rules-input');
 const generateFormatBtn = document.getElementById('generate-format-btn');
 const formatOutput = document.getElementById('format-output');
 const copyFormatBtn = document.getElementById('copy-format-btn');
@@ -227,11 +228,11 @@ logoutBtn.addEventListener('click', () => {
 async function loadSettings() {
     if (auth && auth.currentUser) {
         try {
-            const docRef = doc(db, "users", auth.currentUser.uid, "settings", "format");
             const docSnap = await getDocs(collection(db, "users", auth.currentUser.uid, "settings"));
             docSnap.forEach(d => {
-                if (d.id === "format" && d.data().items) {
-                    formatItemsInput.value = d.data().items;
+                if (d.id === "format") {
+                    if (d.data().items) formatItemsInput.value = d.data().items;
+                    if (d.data().rules) formatRulesInput.value = d.data().rules;
                 }
             });
         } catch (e) {
@@ -240,12 +241,16 @@ async function loadSettings() {
     } else {
         const savedFormat = localStorage.getItem('formatItems');
         if (savedFormat) formatItemsInput.value = savedFormat;
+        const savedRules = localStorage.getItem('formatRules');
+        if (savedRules) formatRulesInput.value = savedRules;
     }
 }
 
 // --- Format Generator Logic ---
 generateFormatBtn.addEventListener('click', async () => {
     const itemsText = formatItemsInput.value.trim();
+    const rulesText = formatRulesInput.value.trim();
+    
     if (!itemsText) {
         alert("抽出したい項目名を入力してください！");
         return;
@@ -255,25 +260,27 @@ generateFormatBtn.addEventListener('click', async () => {
     if (auth && auth.currentUser) {
         try {
             const docRef = doc(db, "users", auth.currentUser.uid, "settings", "format");
-            await updateDoc(docRef, { items: itemsText }).catch(async () => {
-                // if not exists, create
-                await addDoc(collection(db, "users", auth.currentUser.uid, "settings"), { items: itemsText });
-                // wait, doc() to specific ID requires setDoc, but we import only addDoc, updateDoc.
-                // It's safer to just save to localStorage for this simple setting, or use setDoc.
-                // Since setDoc is not imported, I'll fallback to localStorage for now to guarantee no crash.
+            await updateDoc(docRef, { items: itemsText, rules: rulesText }).catch(async () => {
+                await addDoc(collection(db, "users", auth.currentUser.uid, "settings"), { items: itemsText, rules: rulesText });
             });
         } catch (e) {}
     }
     localStorage.setItem('formatItems', itemsText);
+    localStorage.setItem('formatRules', rulesText);
 
     const items = itemsText.split(/[,、]/).map(s => s.trim()).filter(s => s);
     const headers = ["企業名", ...items].join(" | ");
     const dividers = ["---", ...items.map(() => "---")].join(" | ");
     
-    const prompt = `以下の企業情報を調査・整理し、【必ずMarkdownテーブル形式のみ】で出力してください。
+    let prompt = `以下の企業情報を調査・整理し、【必ずMarkdownテーブル形式のみ】で出力してください。
 挨拶や追加の解説、補足事項は【一切不要】です。テーブルだけを出力してください。
-重要なことなので2回言います。Markdownの表以外の文章は【絶対に書かないで】ください。
+重要なことなので2回言います。Markdownの表以外の文章は【絶対に書かないで】ください。\n`;
 
+    if (rulesText) {
+        prompt += `\n【追加の出力ルール・指示】\n${rulesText}\n`;
+    }
+
+    prompt += `
 出力フォーマット：
 | ${headers} |
 | ${dividers} |

@@ -46,10 +46,16 @@
             <!-- Format Generator Section -->
             <section class="glass-card format-section" style="margin-bottom: 24px;">
                 <h2>✨ AI抽出フォーマットの作成</h2>
-                <p>AIに渡すための「強力な出力ルール文」を作成します。表の項目名をカンマ区切りなどで入力してください。</p>
-                <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-                    <input type="text" id="format-items-input" placeholder="例: 企業名, 選考状況, 福利厚生, 求める人物像, オープンワークの評価" style="flex: 1; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);">
-                    <button id="generate-format-btn" class="btn primary" style="width: auto;">フォーマット生成</button>
+                <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 12px;">
+                    <div>
+                        <label style="font-size: 0.85rem; font-weight: 600; color: var(--text-color);">① 抽出したい項目（カンマ区切り）</label>
+                        <input type="text" id="format-items-input" placeholder="例: 企業名, 求める人物像, 選考ステップ, 志望度" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); margin-top: 4px;">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.85rem; font-weight: 600; color: var(--text-color);">② AIへの追加ルール・指示（タグ付け、色付け、メタデータなど・任意）</label>
+                        <textarea id="format-rules-input" placeholder="例:&#10;- 業界や職種には「#IT」「#BtoB」のようにハッシュタグを付けてください。&#10;- 志望度が★4以上の場合は、セルの末尾に <!-- color:green --> と書いてください。&#10;- 締切日は必ず <!-- sort_deadline: 2026-03-01 --> のように書いてください。" style="width: 100%; height: 80px; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); margin-top: 4px; resize: vertical;"></textarea>
+                    </div>
+                    <button id="generate-format-btn" class="btn primary" style="align-self: flex-start;">フォーマット生成</button>
                 </div>
                 <div style="position: relative;">
                     <textarea id="format-output" readonly placeholder="生成されたプロンプトがここに表示されます。コピーしてAIに貼り付けてください。" style="height: 100px; background: var(--bg-alt);"></textarea>
