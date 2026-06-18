@@ -151,9 +151,22 @@ calendarModalSaveBtn.addEventListener('click', async () => {
         // Edit existing
         let found = false;
         if (auth && auth.currentUser) {
-            const docRef = doc(db, "users", auth.currentUser.uid, "companies", currentEditingEventId);
-            await updateDoc(docRef, { "企業名": title, memo: memo, "_meta.deadline": dateStr });
-            found = true;
+            try {
+                const docRef = doc(db, "users", auth.currentUser.uid, "companies", currentEditingEventId);
+                await updateDoc(docRef, { "企業名": title, memo: memo, "_meta.deadline": dateStr });
+                found = true;
+            } catch (e) {
+                console.warn("Firestore updateDoc failed for calendar event:", e.message);
+                // Firestoreに存在しない場合、ローカルで更新
+                const item = mockData.find(d => d.id === currentEditingEventId);
+                if (item) {
+                    item["企業名"] = title;
+                    item.memo = memo;
+                    if (!item._meta) item._meta = {};
+                    item._meta.deadline = dateStr;
+                    found = true;
+                }
+            }
         } else {
             const item = mockData.find(d => d.id === currentEditingEventId);
             if (item) {
@@ -169,7 +182,6 @@ calendarModalSaveBtn.addEventListener('click', async () => {
     } else {
         // Add new
         const newItem = {
-            id: Date.now() + Math.random().toString(36).substr(2, 9),
             "企業名": title,
             createdAt: new Date().toISOString(),
             isHidden: false,
@@ -178,8 +190,11 @@ calendarModalSaveBtn.addEventListener('click', async () => {
         };
         
         if (auth && auth.currentUser) {
-            await addDoc(collection(db, "users", auth.currentUser.uid, "companies"), newItem);
+            const docRefNew = await addDoc(collection(db, "users", auth.currentUser.uid, "companies"), newItem);
+            // FirestoreのドキュメントIDを使用して一貫性を保つ
+            newItem.id = docRefNew.id;
         } else {
+            newItem.id = Date.now() + Math.random().toString(36).substr(2, 9);
             mockData.push(newItem);
             localStorage.setItem('mockData', JSON.stringify(mockData));
             loadData();
@@ -191,7 +206,14 @@ calendarModalSaveBtn.addEventListener('click', async () => {
 calendarModalDeleteBtn.addEventListener('click', async () => {
     if (!currentEditingEventId || !confirm("この予定を削除しますか？")) return;
     if (auth && auth.currentUser) {
-        await deleteDoc(doc(db, "users", auth.currentUser.uid, "companies", currentEditingEventId));
+        try {
+            await deleteDoc(doc(db, "users", auth.currentUser.uid, "companies", currentEditingEventId));
+        } catch (e) {
+            console.warn("Firestore deleteDoc failed for calendar event:", e.message);
+            // Firestoreに存在しない場合、ローカルから削除
+            mockData = mockData.filter(d => d.id !== currentEditingEventId);
+            loadData();
+        }
     } else {
         mockData = mockData.filter(d => d.id !== currentEditingEventId);
         localStorage.setItem('mockData', JSON.stringify(mockData));
@@ -1082,24 +1104,49 @@ function renderQuickTags(data) {
 }
 
 async function updateItemData(id, updates) {
-    if (auth && auth.currentUser) {
-        const docRef = doc(db, "users", auth.currentUser.uid, "companies", id);
-        await updateDoc(docRef, updates);
+    // 対象データを取得してカスタムイベントかどうか判定
+    const targetItem = mockData.find(d => d.id === id);
+    const isCustomEvent = targetItem && targetItem._meta && targetItem._meta.isCustomEvent;
+
+    if (auth && auth.currentUser && !isCustomEvent) {
+        try {
+            const docRef = doc(db, "users", auth.currentUser.uid, "companies", id);
+            await updateDoc(docRef, updates);
+        } catch (e) {
+            console.warn("Firestore updateDoc failed, falling back to local update:", e.message);
+            // Firestoreに存在しないドキュメントの場合、ローカルで処理
+            const idx = mockData.findIndex(d => d.id === id);
+            if (idx !== -1) {
+                mockData[idx] = { ...mockData[idx], ...updates };
+            }
+            loadData();
+        }
     } else {
         const idx = mockData.findIndex(d => d.id === id);
         if (idx !== -1) {
             mockData[idx] = { ...mockData[idx], ...updates };
             localStorage.setItem('mockData', JSON.stringify(mockData));
-            loadData(); // trigger re-render
+            loadData();
         }
     }
 }
 
 async function deleteItemData(id) {
     if (confirm("本当にこのデータを削除しますか？この操作は元に戻せません。")) {
-        if (auth && auth.currentUser) {
-            const docRef = doc(db, "users", auth.currentUser.uid, "companies", id);
-            await deleteDoc(docRef);
+        // 対象データを取得してカスタムイベントかどうか判定
+        const targetItem = mockData.find(d => d.id === id);
+        const isCustomEvent = targetItem && targetItem._meta && targetItem._meta.isCustomEvent;
+
+        if (auth && auth.currentUser && !isCustomEvent) {
+            try {
+                const docRef = doc(db, "users", auth.currentUser.uid, "companies", id);
+                await deleteDoc(docRef);
+            } catch (e) {
+                console.warn("Firestore deleteDoc failed, falling back to local delete:", e.message);
+                // Firestoreに存在しないドキュメントの場合、ローカルで処理
+                mockData = mockData.filter(d => d.id !== id);
+                loadData();
+            }
         } else {
             mockData = mockData.filter(d => d.id !== id);
             localStorage.setItem('mockData', JSON.stringify(mockData));
