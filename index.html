@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>就活コンパニオン</title>
+    <title>就活メモ</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <!-- FullCalendar CDN -->
@@ -13,7 +13,7 @@
     <!-- Auth Screen -->
     <div id="auth-screen" class="screen active">
         <div class="glass-card auth-card">
-            <h1>就活コンパニオン</h1>
+            <h1>就活メモ</h1>
             <p>サインインして専用ダッシュボードにアクセス</p>
             <form id="login-form">
                 <div class="input-group">
@@ -38,11 +38,25 @@
     <!-- Main Dashboard -->
     <div id="main-screen" class="screen">
         <nav class="navbar">
-            <div class="logo">就活コンパニオン</div>
+            <div class="logo">就活メモ</div>
             <button id="logout-btn" class="btn text">ログアウト</button>
         </nav>
 
         <div class="container">
+            <!-- Format Generator Section -->
+            <section class="glass-card format-section" style="margin-bottom: 24px;">
+                <h2>✨ AI抽出フォーマットの作成</h2>
+                <p>AIに渡すための「強力な出力ルール文」を作成します。表の項目名をカンマ区切りなどで入力してください。</p>
+                <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                    <input type="text" id="format-items-input" placeholder="例: 企業名, 選考状況, 福利厚生, 求める人物像, オープンワークの評価" style="flex: 1; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <button id="generate-format-btn" class="btn primary" style="width: auto;">フォーマット生成</button>
+                </div>
+                <div style="position: relative;">
+                    <textarea id="format-output" readonly placeholder="生成されたプロンプトがここに表示されます。コピーしてAIに貼り付けてください。" style="height: 100px; background: var(--bg-alt);"></textarea>
+                    <button id="copy-format-btn" class="btn primary" style="position: absolute; right: 12px; bottom: 28px; width: auto; font-size: 0.85rem; padding: 6px 12px;">コピー</button>
+                </div>
+            </section>
+
             <!-- Data Import Section -->
             <section class="glass-card import-section" style="margin-bottom: 24px;">
                 <h2>AIテキストインポート</h2>
@@ -68,9 +82,10 @@
                         <input type="text" id="search-input" placeholder="検索タグやキーワード (例: #BtoB #かさまし無し)" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(15,23,42,0.6); color: white; font-size: 1rem;">
                         <button id="do-search-btn" class="btn primary" style="width: auto; padding: 0 20px;">検索</button>
                     </div>
-                    <div style="display: flex; gap: 16px; align-items: center; color: #cbd5e1; font-size: 0.9rem;">
+                    <div style="display: flex; gap: 16px; align-items: center; color: var(--text-color); font-size: 0.9rem;">
                         <label style="cursor: pointer;"><input type="radio" name="search-mode" value="AND" checked> AND</label>
                         <label style="cursor: pointer;"><input type="radio" name="search-mode" value="OR"> OR</label>
+                        <label style="cursor: pointer; margin-left: 8px;"><input type="checkbox" id="search-include-hidden"> 非表示も含める</label>
                     </div>
                     
                     <!-- DBMS Sort -->
@@ -100,9 +115,10 @@
                 <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                     <div style="display: flex; align-items: center; gap: 16px;">
                         <h2>企業リスト DBMS</h2>
-                        <label style="font-size: 0.85rem; color: #cbd5e1; cursor: pointer;">
+                        <label style="font-size: 0.85rem; color: var(--text-muted); cursor: pointer;">
                             <input type="checkbox" id="show-hidden-checkbox"> 非表示(アーカイブ)にした企業も表示
                         </label>
+                        <button id="manage-hidden-columns-btn" class="btn text" style="font-size: 0.85rem; padding: 4px 8px;">隠した列を管理</button>
                     </div>
                     <div>
                         <button id="toggle-calendar-btn" class="btn text" style="margin-right: 8px;">📅 カレンダー表示</button>

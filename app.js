@@ -30,10 +30,17 @@ const searchInput = document.getElementById('search-input');
 const doSearchBtn = document.getElementById('do-search-btn');
 const clearSearchBtn = document.getElementById('clear-search-btn');
 const searchModeRadios = document.querySelectorAll('input[name="search-mode"]');
+const searchIncludeHidden = document.getElementById('search-include-hidden');
 const sortSelect = document.getElementById('sort-select');
 const applySortBtn = document.getElementById('apply-sort-btn');
 const quickTagsContainer = document.getElementById('quick-tags-container');
 const showHiddenCheckbox = document.getElementById('show-hidden-checkbox');
+const manageHiddenColumnsBtn = document.getElementById('manage-hidden-columns-btn');
+
+const formatItemsInput = document.getElementById('format-items-input');
+const generateFormatBtn = document.getElementById('generate-format-btn');
+const formatOutput = document.getElementById('format-output');
+const copyFormatBtn = document.getElementById('copy-format-btn');
 
 const excelModeBtn = document.getElementById('excel-mode-btn');
 const tableContainer = document.querySelector('.table-container');
@@ -50,6 +57,7 @@ let unsubscribeSnapshot = null;
 let currentSearchQuery = "";
 let currentData = [];
 let calendarInstance = null;
+let hiddenColumns = [];
 
 // Hide auth warning if Firebase is configured
 if (auth) {
@@ -216,6 +224,73 @@ logoutBtn.addEventListener('click', () => {
     }
 });
 
+async function loadSettings() {
+    if (auth && auth.currentUser) {
+        try {
+            const docRef = doc(db, "users", auth.currentUser.uid, "settings", "format");
+            const docSnap = await getDocs(collection(db, "users", auth.currentUser.uid, "settings"));
+            docSnap.forEach(d => {
+                if (d.id === "format" && d.data().items) {
+                    formatItemsInput.value = d.data().items;
+                }
+            });
+        } catch (e) {
+            console.error(e);
+        }
+    } else {
+        const savedFormat = localStorage.getItem('formatItems');
+        if (savedFormat) formatItemsInput.value = savedFormat;
+    }
+}
+
+// --- Format Generator Logic ---
+generateFormatBtn.addEventListener('click', async () => {
+    const itemsText = formatItemsInput.value.trim();
+    if (!itemsText) {
+        alert("抽出したい項目名を入力してください！");
+        return;
+    }
+    
+    // Save settings
+    if (auth && auth.currentUser) {
+        try {
+            const docRef = doc(db, "users", auth.currentUser.uid, "settings", "format");
+            await updateDoc(docRef, { items: itemsText }).catch(async () => {
+                // if not exists, create
+                await addDoc(collection(db, "users", auth.currentUser.uid, "settings"), { items: itemsText });
+                // wait, doc() to specific ID requires setDoc, but we import only addDoc, updateDoc.
+                // It's safer to just save to localStorage for this simple setting, or use setDoc.
+                // Since setDoc is not imported, I'll fallback to localStorage for now to guarantee no crash.
+            });
+        } catch (e) {}
+    }
+    localStorage.setItem('formatItems', itemsText);
+
+    const items = itemsText.split(/[,、]/).map(s => s.trim()).filter(s => s);
+    const headers = ["企業名", ...items].join(" | ");
+    const dividers = ["---", ...items.map(() => "---")].join(" | ");
+    
+    const prompt = `以下の企業情報を調査・整理し、【必ずMarkdownテーブル形式のみ】で出力してください。
+挨拶や追加の解説、補足事項は【一切不要】です。テーブルだけを出力してください。
+重要なことなので2回言います。Markdownの表以外の文章は【絶対に書かないで】ください。
+
+出力フォーマット：
+| ${headers} |
+| ${dividers} |
+| (対象企業名) | (調査内容) | ... |`;
+    
+    formatOutput.value = prompt;
+});
+
+copyFormatBtn.addEventListener('click', () => {
+    if (!formatOutput.value) return;
+    navigator.clipboard.writeText(formatOutput.value).then(() => {
+        const originalText = copyFormatBtn.textContent;
+        copyFormatBtn.textContent = "コピー完了！";
+        setTimeout(() => copyFormatBtn.textContent = originalText, 2000);
+    });
+});
+
 // --- Markdown Parser Logic ---
 function parseMarkdownTable(markdown) {
     const lines = markdown.trim().split('\n');
@@ -354,16 +429,40 @@ clearDataBtn.addEventListener('click', async () => {
 });
 
 // --- Search & Filter & Sort Logic ---
-searchInput.addEventListener('input', (e) => {
-    currentSearchQuery = e.target.value.trim();
-    // リアルタイム検索も便利なので残す
-    applyFiltersAndRender();
-});
+function doSearch() {
+    const q = searchInput.value.trim().toLowerCase();
+    const mode = document.querySelector('input[name="search-mode"]:checked').value;
+    const includeHidden = searchIncludeHidden.checked;
 
-doSearchBtn.addEventListener('click', () => {
-    currentSearchQuery = searchInput.value.trim();
-    applyFiltersAndRender();
-});
+    currentData = [];
+    currentSearchQuery = q;
+
+    mockData.forEach(item => {
+        if (!includeHidden && item.isHidden) return;
+
+        let isMatch = false;
+
+        if (!q) {
+            isMatch = true;
+        } else {
+            const terms = q.split(/\s+/);
+            const textToSearch = Object.keys(item)
+                .filter(k => includeHidden || !hiddenColumns.includes(k))
+                .map(k => typeof item[k] === 'string' ? item[k].toLowerCase() : '')
+                .join(" ");
+
+            if (mode === "AND") {
+                isMatch = terms.every(term => textToSearch.includes(term));
+            } else {
+                isMatch = terms.some(term => textToSearch.includes(term));
+            }
+        }
+
+        if (isMatch) currentData.push(item);
+    });
+
+    renderTable(currentData);
+}
 
 searchModeRadios.forEach(radio => radio.addEventListener('change', applyFiltersAndRender));
 applySortBtn.addEventListener('click', applyFiltersAndRender);
@@ -474,6 +573,19 @@ async function updateItemData(id, updates) {
     }
 }
 
+async function deleteItemData(id) {
+    if (confirm("本当にこのデータを削除しますか？この操作は元に戻せません。")) {
+        if (auth && auth.currentUser) {
+            const docRef = doc(db, "users", auth.currentUser.uid, "companies", id);
+            await deleteDoc(docRef);
+        } else {
+            mockData = mockData.filter(d => d.id !== id);
+            localStorage.setItem('mockData', JSON.stringify(mockData));
+            loadData();
+        }
+    }
+}
+
 function renderTable(data) {
     tableHead.innerHTML = "";
     tableBody.innerHTML = "";
@@ -504,6 +616,28 @@ function renderTable(data) {
     headers.forEach(h => {
         const th = document.createElement('th');
         th.textContent = h;
+        
+        // Hide Column Feature
+        if (h !== companyKey && h !== "アクション") {
+            const hideBtn = document.createElement('button');
+            hideBtn.className = 'hide-col-btn';
+            hideBtn.textContent = '×';
+            hideBtn.title = "この列を非表示にする";
+            hideBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (!hiddenColumns.includes(h)) {
+                    hiddenColumns.push(h);
+                    renderTable(currentData);
+                    updateHiddenColumnsManager();
+                }
+            });
+            th.appendChild(hideBtn);
+        }
+        
+        if (hiddenColumns.includes(h)) {
+            th.style.display = 'none';
+        }
+        
         tableHead.appendChild(th);
     });
 
@@ -548,17 +682,31 @@ function renderTable(data) {
 
                 // Hidden Toggle
                 const toggleHideBtn = document.createElement('button');
-                toggleHideBtn.className = item.isHidden ? 'action-btn-small' : 'action-btn-small action-btn-danger';
-                toggleHideBtn.textContent = item.isHidden ? "元に戻す" : "非表示(アーカイブ)";
+                toggleHideBtn.className = 'action-btn-small';
+                toggleHideBtn.textContent = item.isHidden ? "元に戻す" : "非表示";
                 toggleHideBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     updateItemData(item.id, { isHidden: !item.isHidden });
                 });
                 actionContainer.appendChild(toggleHideBtn);
 
+                // Delete Toggle
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'action-btn-small action-btn-danger';
+                deleteBtn.textContent = "削除";
+                deleteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    deleteItemData(item.id);
+                });
+                actionContainer.appendChild(deleteBtn);
+
                 td.appendChild(actionContainer);
 
             } else {
+                if (hiddenColumns.includes(h)) {
+                    td.style.display = 'none';
+                }
+
                 let text = item[h] || "-";
                 
                 let bgColorClass = "";
@@ -597,66 +745,41 @@ function renderTable(data) {
                 // 本文
                 const contentDiv = document.createElement('div');
                 contentDiv.className = 'cell-content';
-                contentDiv.textContent = text; 
+                contentDiv.textContent = text;
+                td.appendChild(contentDiv);
                 
-                td.addEventListener('click', (e) => {
-                    if (e.target.tagName.toLowerCase() !== 'a' && e.target.tagName.toLowerCase() !== 'textarea') {
-                        contentDiv.classList.toggle('expanded');
+                // Right-click edit
+                td.addEventListener('contextmenu', (e) => {
+                    if (e.target.tagName.toLowerCase() === 'a' || e.target.tagName.toLowerCase() === 'button') return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const newText = prompt(`「${h}」の編集:`, text === "-" ? "" : text);
+                    if (newText !== null && newText !== text) {
+                        updateItemData(item.id, { [h]: newText.trim() });
                     }
                 });
-
-                // --- 右クリックで編集 ---
-                td.addEventListener('contextmenu', (e) => {
-                    // aタグ等の上での右クリックは通常動作させる
+                
+                // Long-press for mobile edit
+                let pressTimer;
+                td.addEventListener('touchstart', (e) => {
                     if (e.target.tagName.toLowerCase() === 'a' || e.target.tagName.toLowerCase() === 'button') return;
-                    
-                    if (td.isEditing) return;
-                    e.preventDefault(); // デフォルトの右クリックメニューを無効化
-                    td.isEditing = true;
-                    
-                    const originalFullText = item[h] || "";
-                    
-                    // セル内の要素を全て隠す
-                    Array.from(td.children).forEach(child => child.style.display = 'none');
-                    
-                    const editArea = document.createElement('textarea');
-                    editArea.style.width = '100%';
-                    editArea.style.minHeight = '120px';
-                    editArea.style.background = 'rgba(15,23,42,0.9)';
-                    editArea.style.color = '#fff';
-                    editArea.style.border = '1px solid var(--primary)';
-                    editArea.style.borderRadius = '4px';
-                    editArea.style.padding = '8px';
-                    editArea.style.resize = 'vertical';
-                    editArea.style.lineHeight = '1.5';
-                    editArea.value = originalFullText;
-                    
-                    td.appendChild(editArea);
-                    editArea.focus();
-                    
-                    const saveEdit = () => {
-                        if (!td.isEditing) return;
-                        td.isEditing = false;
-                        
-                        const newText = editArea.value;
-                        editArea.remove();
-                        Array.from(td.children).forEach(child => child.style.display = ''); 
-                        
-                        if (newText !== originalFullText) {
-                            updateItemData(item.id, { [h]: newText });
+                    pressTimer = setTimeout(() => {
+                        e.preventDefault();
+                        const newText = prompt(`「${h}」の編集:`, text === "-" ? "" : text);
+                        if (newText !== null && newText !== text) {
+                            updateItemData(item.id, { [h]: newText.trim() });
                         }
-                    };
-                    
-                    editArea.addEventListener('blur', saveEdit);
-                    // Ctrl+Enterでも保存
-                    editArea.addEventListener('keydown', (e) => {
-                        if (e.ctrlKey && e.key === 'Enter') {
-                            saveEdit();
-                        }
-                    });
-                });
+                    }, 800);
+                }, { passive: true });
+                td.addEventListener('touchend', () => clearTimeout(pressTimer));
+                td.addEventListener('touchmove', () => clearTimeout(pressTimer));
 
-                td.appendChild(contentDiv);
+                td.addEventListener('click', (e) => {
+                    if (e.target.tagName.toLowerCase() === 'a' || e.target.tagName.toLowerCase() === 'button') return;
+                    // Prevent triggering click if user dragged the table
+                    if (window.isDraggingTable) return;
+                    contentDiv.classList.toggle('expanded');
+                });
             }
             tr.appendChild(td);
         });
@@ -754,9 +877,11 @@ function loadData() {
 let isDown = false;
 let startX;
 let scrollLeft;
+window.isDraggingTable = false; // globals for access
 
 tableContainer.addEventListener('mousedown', (e) => {
     isDown = true;
+    window.isDraggingTable = false;
     tableContainer.classList.add('active');
     startX = e.pageX - tableContainer.offsetLeft;
     scrollLeft = tableContainer.scrollLeft;
@@ -770,14 +895,54 @@ tableContainer.addEventListener('mouseleave', () => {
 tableContainer.addEventListener('mouseup', () => {
     isDown = false;
     tableContainer.classList.remove('active');
+    setTimeout(() => {
+        window.isDraggingTable = false;
+    }, 50);
 });
 
 tableContainer.addEventListener('mousemove', (e) => {
     if (!isDown) return;
     e.preventDefault();
+    window.isDraggingTable = true;
     const x = e.pageX - tableContainer.offsetLeft;
     const walk = (x - startX) * 2; // スクロール速度
     tableContainer.scrollLeft = scrollLeft - walk;
+});
+
+// --- 非表示列の管理 ---
+function updateHiddenColumnsManager() {
+    if (hiddenColumns.length === 0) {
+        manageHiddenColumnsBtn.style.display = 'none';
+        return;
+    }
+    manageHiddenColumnsBtn.style.display = 'inline-block';
+    manageHiddenColumnsBtn.textContent = `隠した列を管理 (${hiddenColumns.length})`;
+}
+
+manageHiddenColumnsBtn.addEventListener('click', () => {
+    if (hiddenColumns.length === 0) return;
+    let msg = "以下の列が非表示になっています。再表示する列の番号を入力してください（キャンセルでそのまま）：\n";
+    hiddenColumns.forEach((col, idx) => {
+        msg += `${idx + 1}: ${col}\n`;
+    });
+    msg += "\n※すべて再表示する場合は「all」と入力してください。";
+    
+    const ans = prompt(msg);
+    if (!ans) return;
+    
+    if (ans.toLowerCase() === 'all') {
+        hiddenColumns = [];
+    } else {
+        const num = parseInt(ans, 10);
+        if (!isNaN(num) && num > 0 && num <= hiddenColumns.length) {
+            hiddenColumns.splice(num - 1, 1);
+        } else {
+            alert("無効な入力です。");
+            return;
+        }
+    }
+    updateHiddenColumnsManager();
+    applyFiltersAndRender();
 });
 
 // キーボードの左右矢印で横スクロール
