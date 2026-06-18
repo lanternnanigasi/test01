@@ -1091,12 +1091,44 @@ function renderQuickTags(data) {
         btn.className = 'quick-tag-btn';
         btn.textContent = tag;
         btn.addEventListener('click', () => {
-            if (searchInput.value.includes(tag)) {
-                searchInput.value = searchInput.value.replace(tag, "").trim();
-            } else {
-                searchInput.value = (searchInput.value + " " + tag).trim();
+            // タグが既にクエリ行に存在するかチェック
+            let foundRowIdx = -1;
+            for (let i = 0; i < queryRows.length; i++) {
+                if (queryRows[i].field === "_tags" && queryRows[i].value.includes(tag)) {
+                    foundRowIdx = i;
+                    break;
+                }
             }
-            currentSearchQuery = searchInput.value;
+
+            if (foundRowIdx !== -1) {
+                // 存在する場合は削除
+                queryRows[foundRowIdx].value = queryRows[foundRowIdx].value.replace(tag, "").trim();
+                // 行が空になったら行ごと削除（ただし最後の1行は残す）
+                if (queryRows[foundRowIdx].value === "") {
+                    if (queryRows.length > 1) {
+                        queryRows.splice(foundRowIdx, 1);
+                    } else {
+                        queryRows[foundRowIdx].field = "all"; // リセット
+                    }
+                }
+            } else {
+                // 存在しない場合は追加
+                let targetRowIdx = queryRows.findIndex(r => r.field === "_tags");
+                if (targetRowIdx === -1) {
+                    // _tags行がない場合、空の最初の行があればそれを使う
+                    if (queryRows.length === 1 && queryRows[0].value === "") {
+                        queryRows[0].field = "_tags";
+                        queryRows[0].value = tag;
+                    } else {
+                        // 新しい行を追加
+                        queryRows.push({ id: Date.now(), bracketOpen: false, not: false, field: "_tags", operator: "contains", value: tag, bracketClose: false, logic: "AND" });
+                    }
+                } else {
+                    // 既存の_tags行に追加
+                    queryRows[targetRowIdx].value = (queryRows[targetRowIdx].value + " " + tag).trim();
+                }
+            }
+            renderQueryBuilder();
             applyFiltersAndRender();
         });
         quickTagsContainer.appendChild(btn);
