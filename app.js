@@ -4,10 +4,10 @@ import {
     createUserWithEmailAndPassword,
     signOut,
     onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+} from "firebase/auth";
 import { 
     collection, addDoc, getDocs, onSnapshot, deleteDoc, doc, updateDoc
-} from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+} from "firebase/firestore";
 
 // DOM Elements
 const authScreen = document.getElementById('auth-screen');
