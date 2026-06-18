@@ -124,13 +124,15 @@ let currentEditingEventId = null;
 const calendarModal = document.getElementById('calendar-edit-modal');
 const calendarModalInputTitle = document.getElementById('calendar-modal-input-title');
 const calendarModalInputDate = document.getElementById('calendar-modal-input-date');
+const calendarModalInputMemo = document.getElementById('calendar-modal-input-memo');
 const calendarModalDeleteBtn = document.getElementById('calendar-modal-delete-btn');
 const calendarModalSaveBtn = document.getElementById('calendar-modal-save-btn');
 
-function openCalendarModal(dateStr, title = "", eventId = null) {
+function openCalendarModal(dateStr, title = "", eventId = null, memo = "") {
     currentEditingEventId = eventId;
     calendarModalInputTitle.value = title;
     calendarModalInputDate.value = dateStr;
+    calendarModalInputMemo.value = memo;
     calendarModalDeleteBtn.style.display = eventId ? 'block' : 'none';
     calendarModal.style.display = 'flex';
 }
@@ -138,6 +140,8 @@ function openCalendarModal(dateStr, title = "", eventId = null) {
 calendarModalSaveBtn.addEventListener('click', async () => {
     const title = calendarModalInputTitle.value.trim();
     const dateStr = calendarModalInputDate.value;
+    const memo = calendarModalInputMemo.value.trim();
+
     if (!title || !dateStr) {
         alert("タイトルと日付を入力してください。");
         return;
@@ -148,12 +152,13 @@ calendarModalSaveBtn.addEventListener('click', async () => {
         let found = false;
         if (auth && auth.currentUser) {
             const docRef = doc(db, "users", auth.currentUser.uid, "companies", currentEditingEventId);
-            await updateDoc(docRef, { "企業名": title, "_meta.deadline": dateStr });
+            await updateDoc(docRef, { "企業名": title, memo: memo, "_meta.deadline": dateStr });
             found = true;
         } else {
             const item = mockData.find(d => d.id === currentEditingEventId);
             if (item) {
                 item["企業名"] = title;
+                item.memo = memo;
                 if (!item._meta) item._meta = {};
                 item._meta.deadline = dateStr;
                 localStorage.setItem('mockData', JSON.stringify(mockData));
@@ -168,7 +173,7 @@ calendarModalSaveBtn.addEventListener('click', async () => {
             "企業名": title,
             createdAt: new Date().toISOString(),
             isHidden: false,
-            memo: "",
+            memo: memo,
             _meta: { deadline: dateStr, isCustomEvent: true }
         };
         
@@ -213,7 +218,8 @@ function initCalendar() {
         eventClick: function(info) {
             const ev = info.event;
             // FullCalendar may not expose end date easily if allDay, so we use startStr
-            openCalendarModal(ev.startStr, ev.title, ev.id);
+            const memo = ev.extendedProps.memo || "";
+            openCalendarModal(ev.startStr, ev.title, ev.id, memo);
         }
     });
     calendarInstance.render();
@@ -237,7 +243,10 @@ function getCalendarEvents() {
                 title: title,
                 start: item._meta.deadline,
                 allDay: true,
-                color: item._meta.isCustomEvent ? 'var(--secondary)' : 'var(--primary)'
+                color: item._meta.isCustomEvent ? 'var(--secondary)' : 'var(--primary)',
+                extendedProps: {
+                    memo: item.memo || ""
+                }
             });
         }
     });
@@ -1073,7 +1082,7 @@ function renderQuickTags(data) {
 }
 
 async function updateItemData(id, updates) {
-    if (db) {
+    if (auth && auth.currentUser) {
         const docRef = doc(db, "users", auth.currentUser.uid, "companies", id);
         await updateDoc(docRef, updates);
     } else {
@@ -1103,14 +1112,17 @@ function renderTable(data) {
     tableHead.innerHTML = "";
     tableBody.innerHTML = "";
 
-    if (data.length === 0) {
+    // カレンダー専用イベントをテーブルから除外
+    const tableData = data.filter(item => !(item._meta && item._meta.isCustomEvent));
+
+    if (tableData.length === 0) {
         tableBody.innerHTML = "<tr><td colspan='10'>表示できるデータがありません。</td></tr>";
         return;
     }
 
     const ignoreHeaders = ['id', 'createdAt', 'userId', '会社名', '企業名', 'isHidden', 'memo', '_meta', '項目', '調査結果', '内容'];
     const headerSet = new Set();
-    data.forEach(item => {
+    tableData.forEach(item => {
         Object.keys(item).forEach(k => {
             const cleanK = k.trim();
             if (!cleanK) return; // 空白キーを除外
@@ -1154,7 +1166,7 @@ function renderTable(data) {
         tableHead.appendChild(th);
     });
 
-    data.forEach(item => {
+    tableData.forEach(item => {
         const tr = document.createElement('tr');
         if (item.isHidden) {
             tr.classList.add('is-hidden');
