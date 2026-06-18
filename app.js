@@ -120,6 +120,81 @@ if (closeCalendarBtn) {
 }
 
 // --- Calendar Logic ---
+let currentEditingEventId = null;
+const calendarModal = document.getElementById('calendar-edit-modal');
+const calendarModalInputTitle = document.getElementById('calendar-modal-input-title');
+const calendarModalInputDate = document.getElementById('calendar-modal-input-date');
+const calendarModalDeleteBtn = document.getElementById('calendar-modal-delete-btn');
+const calendarModalSaveBtn = document.getElementById('calendar-modal-save-btn');
+
+function openCalendarModal(dateStr, title = "", eventId = null) {
+    currentEditingEventId = eventId;
+    calendarModalInputTitle.value = title;
+    calendarModalInputDate.value = dateStr;
+    calendarModalDeleteBtn.style.display = eventId ? 'block' : 'none';
+    calendarModal.style.display = 'flex';
+}
+
+calendarModalSaveBtn.addEventListener('click', async () => {
+    const title = calendarModalInputTitle.value.trim();
+    const dateStr = calendarModalInputDate.value;
+    if (!title || !dateStr) {
+        alert("タイトルと日付を入力してください。");
+        return;
+    }
+
+    if (currentEditingEventId) {
+        // Edit existing
+        let found = false;
+        if (auth && auth.currentUser) {
+            const docRef = doc(db, "users", auth.currentUser.uid, "companies", currentEditingEventId);
+            await updateDoc(docRef, { "企業名": title, "_meta.deadline": dateStr });
+            found = true;
+        } else {
+            const item = mockData.find(d => d.id === currentEditingEventId);
+            if (item) {
+                item["企業名"] = title;
+                if (!item._meta) item._meta = {};
+                item._meta.deadline = dateStr;
+                localStorage.setItem('mockData', JSON.stringify(mockData));
+                found = true;
+            }
+        }
+        if (found) loadData();
+    } else {
+        // Add new
+        const newItem = {
+            id: Date.now() + Math.random().toString(36).substr(2, 9),
+            "企業名": title,
+            createdAt: new Date().toISOString(),
+            isHidden: false,
+            memo: "",
+            _meta: { deadline: dateStr, isCustomEvent: true }
+        };
+        
+        if (auth && auth.currentUser) {
+            await addDoc(collection(db, "users", auth.currentUser.uid, "companies"), newItem);
+        } else {
+            mockData.push(newItem);
+            localStorage.setItem('mockData', JSON.stringify(mockData));
+            loadData();
+        }
+    }
+    calendarModal.style.display = 'none';
+});
+
+calendarModalDeleteBtn.addEventListener('click', async () => {
+    if (!currentEditingEventId || !confirm("この予定を削除しますか？")) return;
+    if (auth && auth.currentUser) {
+        await deleteDoc(doc(db, "users", auth.currentUser.uid, "companies", currentEditingEventId));
+    } else {
+        mockData = mockData.filter(d => d.id !== currentEditingEventId);
+        localStorage.setItem('mockData', JSON.stringify(mockData));
+        loadData();
+    }
+    calendarModal.style.display = 'none';
+});
+
 function initCalendar() {
     if (typeof FullCalendar === 'undefined') return;
     calendarInstance = new FullCalendar.Calendar(calendarEl, {
@@ -132,30 +207,13 @@ function initCalendar() {
             right: 'dayGridMonth,listMonth'
         },
         events: getCalendarEvents(),
-        dateClick: async function(info) {
-            const title = prompt("追加する予定を入力してください:");
-            if (title) {
-                const newItem = {
-                    id: Date.now() + Math.random().toString(36).substr(2, 9),
-                    "企業名": title,
-                    createdAt: new Date().toISOString(),
-                    isHidden: false,
-                    memo: "",
-                    _meta: { deadline: info.dateStr, isCustomEvent: true }
-                };
-                
-                if (auth && auth.currentUser) {
-                    await addDoc(collection(db, "users", auth.currentUser.uid, "companies"), newItem);
-                } else {
-                    mockData.push(newItem);
-                    localStorage.setItem('mockData', JSON.stringify(mockData));
-                    loadData();
-                }
-            }
+        dateClick: function(info) {
+            openCalendarModal(info.dateStr);
         },
         eventClick: function(info) {
-            // イベントクリックで対象企業・予定の編集または削除ができてもよいが、今回は簡易表示
-            alert('予定: ' + info.event.title);
+            const ev = info.event;
+            // FullCalendar may not expose end date easily if allDay, so we use startStr
+            openCalendarModal(ev.startStr, ev.title, ev.id);
         }
     });
     calendarInstance.render();
@@ -173,11 +231,13 @@ function getCalendarEvents() {
     currentData.forEach(item => {
         if (item.isHidden && !showHiddenCheckbox.checked) return;
         if (item._meta && item._meta.deadline) {
+            const title = item._meta.isCustomEvent ? item['企業名'] : ((item['企業名'] || item['会社名'] || '不明な企業') + ' 締切');
             events.push({
-                title: (item['企業名'] || item['会社名'] || '不明な企業') + ' 締切',
+                id: item.id,
+                title: title,
                 start: item._meta.deadline,
                 allDay: true,
-                color: 'var(--primary)'
+                color: item._meta.isCustomEvent ? 'var(--secondary)' : 'var(--primary)'
             });
         }
     });
@@ -267,7 +327,7 @@ logoutBtn.addEventListener('click', () => {
 });
 
 let formatBuilderData = [
-    { id: Date.now(), name: "", attributes: [] }
+    { id: Date.now(), name: "", description: "", attributes: [] }
 ];
 
 const availableColors = [
@@ -323,6 +383,17 @@ function renderFormatBuilder() {
         topRow.appendChild(addAttrBtn);
         topRow.appendChild(delBtn);
         row.appendChild(topRow);
+
+        // Description Input
+        const descInput = document.createElement('input');
+        descInput.type = 'text';
+        descInput.placeholder = "何を調べるか・詳細な指示 (例: 具体的な事業内容を簡潔に)";
+        descInput.value = item.description || "";
+        descInput.style.padding = "6px";
+        descInput.style.fontSize = "0.85rem";
+        descInput.style.width = "100%";
+        descInput.addEventListener('input', (e) => { item.description = e.target.value; });
+        row.appendChild(descInput);
 
         // Attributes container
         if (item.attributes.length > 0) {
@@ -462,45 +533,37 @@ generateFormatBtn.addEventListener('click', async () => {
     const headers = ["企業名", ...validItems.map(d => d.name)].join(" | ");
     const dividers = ["---", ...validItems.map(() => "---")].join(" | ");
     
-    let prompt = `以下の企業情報を調査・整理し、【必ずMarkdownテーブル形式のみ】で出力してください。
-【厳重注意】
-・見やすい表形式などのリッチテキスト装飾は【絶対に】禁じます。
-・挨拶や追加の解説、補足事項は【一切不要】です。テーブルのテキストのみを出力してください。
-・機械が処理しやすい純粋なMarkdownテキストとして出力することが必須条件です。\n`;
+    // 冒頭
+    let prompt = `以下の企業情報を調査・整理し、【必ずMarkdownテーブル形式のみ】で出力してください。見やすい表形式などのリッチテキスト装飾は禁じます。\n\n■ 抽出項目とルール\n- 企業名\n`;
 
-    let rulesText = "";
     let varCount = 1;
     validItems.forEach(item => {
-        if (!item.attributes || item.attributes.length === 0) return;
+        prompt += `- ${item.name}\n`;
+        if (item.description) {
+            prompt += `  (説明: ${item.description})\n`;
+        }
         
-        let itemRules = "";
-        item.attributes.forEach(attr => {
-            if (attr.type === "hashtag") {
-                itemRules += `  - 重要なキーワードに必ず「#IT」「#BtoB」のようにハッシュタグを付けて出力すること\n`;
-            } else if (attr.type === "color" && attr.condition) {
-                // 12色の対応
-                itemRules += `  - 【絶対厳守】「${attr.condition}」に該当する場合は、セルの文章の末尾に必ず <!-- color:${attr.color} --> と記述すること。この例外処理を怠るとシステムが破壊されるため必ず守ること。\n`;
-            } else if (attr.type === "variable") {
-                const varName = `var_${varCount.toString().padStart(3, '0')}`;
-                itemRules += `  - 【絶対厳守】値の末尾に必ず <!-- ${varName}: (抽出した数値や日付などの値) --> という隠しメタデータを追記すること。この例外処理を怠るとシステムが破壊されるため必ず守ること。\n`;
-                varCount++;
-            }
-        });
-        
-        if (itemRules) {
-            rulesText += `- 「${item.name}」の列について:\n${itemRules}`;
+        if (item.attributes && item.attributes.length > 0) {
+            item.attributes.forEach(attr => {
+                if (attr.type === "hashtag") {
+                    prompt += `  (ルール: 重要なキーワードには「#IT」「#BtoB」のようにハッシュタグを付けてください)\n`;
+                } else if (attr.type === "color" && attr.condition) {
+                    prompt += `  (ルール: 「${attr.condition}」に該当する場合は、セルの末尾に <!-- color:${attr.color} --> と記載してください)\n`;
+                } else if (attr.type === "variable") {
+                    const varName = `var_${varCount.toString().padStart(3, '0')}`;
+                    prompt += `  (ルール: 必ず数値や日付のみを抽出し、セルの末尾に <!-- ${varName}: (抽出した値) --> と記載してください)\n`;
+                    varCount++;
+                }
+            });
         }
     });
 
-    if (rulesText) {
-        prompt += `\n【各項目に対する追加の出力ルール・指示】\n${rulesText}\n`;
-    }
-
-    prompt += `
-出力フォーマット：
-| ${headers} |
-| ${dividers} |
-| (対象企業名) | (調査内容) | ... |`;
+    // 中間
+    prompt += `\n人間が見やすい表などの出力ではなく、下に示すマークダウン形式でのみ出力せよ。\n\n`;
+    prompt += `出力フォーマット：\n| ${headers} |\n| ${dividers} |\n| (対象企業名) | (調査内容) | ... |\n\n`;
+    
+    // 末尾
+    prompt += `必ず「|」で情報が整理されたマークダウンの記法で、文字によってのみ出力すること。表の状態で出力してはならない。`;
     
     formatOutput.value = prompt;
 });
@@ -656,6 +719,25 @@ let queryRows = [
     { id: Date.now(), bracketOpen: false, not: false, field: "all", operator: "contains", value: "", bracketClose: false, logic: "AND" }
 ];
 
+function getAllTags() {
+    const tags = new Set();
+    const hashRegex = /#[\w\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FA5]+/g;
+    mockData.forEach(item => {
+        // 本文やメモからタグを抽出
+        Object.values(item).forEach(val => {
+            if (typeof val === 'string') {
+                const matches = val.match(hashRegex);
+                if (matches) matches.forEach(m => tags.add(m));
+            }
+        });
+        if (item.memo) {
+            const matches = item.memo.match(hashRegex);
+            if (matches) matches.forEach(m => tags.add(m));
+        }
+    });
+    return Array.from(tags).sort();
+}
+
 function renderQueryBuilder() {
     queryBuilderContainer.innerHTML = "";
     
@@ -671,6 +753,8 @@ function renderQueryBuilder() {
             Object.keys(item._meta).forEach(k => availableFields.add(k));
         }
     });
+
+    const allTags = getAllTags();
     
     queryRows.forEach((row, index) => {
         const rowDiv = document.createElement('div');
@@ -706,7 +790,12 @@ function renderQueryBuilder() {
             fieldSelect.innerHTML += `<option value="${f}">${f}</option>`;
         });
         fieldSelect.value = row.field;
-        fieldSelect.addEventListener('change', (e) => { row.field = e.target.value; renderQueryBuilder(); });
+        fieldSelect.addEventListener('change', (e) => { 
+            row.field = e.target.value;
+            // タグの場合はオペレータを contains に固定
+            if(row.field === "_tags") row.operator = "contains";
+            renderQueryBuilder(); 
+        });
         
         // Operator Select
         const opSelect = document.createElement('select');
@@ -714,6 +803,9 @@ function renderQueryBuilder() {
         if (row.field === "_bookmarked") {
             opSelect.innerHTML = `<option value="is_true">である</option>`;
             row.operator = "is_true";
+        } else if (row.field === "_tags") {
+            opSelect.innerHTML = `<option value="contains">を含む</option>`;
+            row.operator = "contains";
         } else {
             opSelect.innerHTML = `
                 <option value="contains">を含む</option>
@@ -727,15 +819,31 @@ function renderQueryBuilder() {
         }
         opSelect.addEventListener('change', (e) => { row.operator = e.target.value; });
         
-        // Value Input
-        const valInput = document.createElement('input');
-        valInput.type = 'text';
-        valInput.placeholder = "値";
-        valInput.value = row.value;
-        valInput.style.padding = '4px';
-        valInput.style.flex = '1';
-        if (row.field === "_bookmarked") valInput.style.display = 'none';
-        valInput.addEventListener('input', (e) => { row.value = e.target.value; });
+        // Value Input / Select
+        let valInput;
+        if (row.field === "_tags") {
+            valInput = document.createElement('select');
+            valInput.style.padding = '4px';
+            valInput.style.flex = '1';
+            valInput.innerHTML = `<option value="">(タグを選択)</option>`;
+            allTags.forEach(tag => {
+                const opt = document.createElement('option');
+                opt.value = tag;
+                opt.textContent = tag;
+                if (row.value === tag) opt.selected = true;
+                valInput.appendChild(opt);
+            });
+            valInput.addEventListener('change', (e) => { row.value = e.target.value; });
+        } else {
+            valInput = document.createElement('input');
+            valInput.type = 'text';
+            valInput.placeholder = "値";
+            valInput.value = row.value;
+            valInput.style.padding = '4px';
+            valInput.style.flex = '1';
+            if (row.field === "_bookmarked") valInput.style.display = 'none';
+            valInput.addEventListener('input', (e) => { row.value = e.target.value; });
+        }
         
         // ")"
         const closeCheck = document.createElement('label');
