@@ -3,16 +3,15 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebas
 import { getAuth } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
-// TODO: Firebaseコンソールでプロジェクトを作成し、Webアプリを追加して、
-// 以下に表示される firebaseConfig の内容を貼り付けてください。
+// Viteの環境変数（.env）から安全にキーを読み込む
 const firebaseConfig = {
-  apiKey: "AIzaSyAM6t7m-dWzbhVVCkJGXcIDoDhAdrafIzM",
-  authDomain: "test01-33976.firebaseapp.com",
-  projectId: "test01-33976",
-  storageBucket: "test01-33976.firebasestorage.app",
-  messagingSenderId: "917388668281",
-  appId: "1:917388668281:web:a6ae34b6d699fb8d2e13a8",
-  measurementId: "G-KJ3XG4Y8LG"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
 let app, auth, db;
