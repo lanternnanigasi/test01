@@ -45,7 +45,10 @@
         <div class="container">
             <!-- Format Generator Section -->
             <section class="glass-card format-section" style="margin-bottom: 24px;">
-                <h2>✨ AI抽出フォーマットの作成</h2>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <h2>✨ AI抽出フォーマットの作成</h2>
+                    <button class="icon-btn help-btn" onclick="document.getElementById('help-modal').style.display='flex'" style="background: rgba(0,166,81,0.1); color: var(--primary); font-weight: bold; border-radius: 50%; width: 24px; height: 24px; font-size: 0.9rem; padding: 0;">?</button>
+                </div>
                 <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 12px;">
                     <p style="font-size: 0.85rem; color: var(--text-color); opacity: 0.8;">抽出したい項目を追加し、それぞれの属性（タグ化やカスタム変数など）を設定してください。</p>
                     
@@ -79,7 +82,8 @@
             </section>
 
             <!-- Calendar Section -->
-            <section class="glass-card" style="margin-bottom: 24px; display: none;" id="calendar-section">
+            <section class="glass-card" style="margin-bottom: 24px; display: none; position: relative;" id="calendar-section">
+                <button id="close-calendar-btn" class="icon-btn" style="position: absolute; top: 16px; right: 16px; font-size: 1.2rem;">✕</button>
                 <h2>カレンダー (締切日 / 面談日)</h2>
                 <div id='calendar' style="margin-top: 16px; background: rgba(15,23,42,0.5); padding: 16px; border-radius: 8px;"></div>
             </section>
@@ -167,6 +171,46 @@
                     <button class="btn secondary" onclick="document.getElementById('edit-modal').style.display='none'">キャンセル</button>
                     <button id="edit-modal-save-btn" class="btn primary">保存</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Help Modal -->
+    <div id="help-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content glass-card" style="width: 800px; max-width: 95%; max-height: 90vh;">
+            <div class="modal-header">
+                <h3>使い方ガイド：AI抽出フォーマットの作成例</h3>
+                <button class="icon-btn" onclick="document.getElementById('help-modal').style.display='none'">✕</button>
+            </div>
+            <div class="modal-body" style="line-height: 1.6;">
+                <p>以下のフォーマット例は、ガイド等に掲載するための「就活情報抽出用フォーマット」のサンプルです。</p>
+                <p><strong>【トリプルチェック済み】個人情報、学歴、成績、特定のスキル（数学等）、資格などの情報は完全に削除・除外しております。</strong></p>
+                <hr style="margin: 16px 0; border: none; border-top: 1px solid var(--border-color);" />
+                <h4>📝 AI抽出フォーマット（プロンプト生成内容）例</h4>
+                <pre style="background: #1e293b; color: #e2e8f0; padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 0.85rem; margin-top: 8px;"><code>以下の企業情報を調査・整理し、【必ずMarkdownテーブル形式のみ】で出力してください。見やすい表形式などのリッチテキスト装飾は禁じます。
+
+■ 抽出項目とルール
+- 企業名
+- 業界
+  (ルール: 業界名には「#IT」などのようにハッシュタグを付けてください)
+- 職種
+  (ルール: 職種名にはハッシュタグを付けてください)
+- 初任給（万円）
+  (ルール: 必ず数値のみを抽出し、セルの末尾に &lt;!-- var_salary: (抽出した数値) --&gt; と記載してください)
+- 志望度
+  (ルール: ★の数で表現し、セルの末尾に &lt;!-- var_star: (数値) --&gt; と記載してください)
+  (ルール: 志望度が★4以上の場合は、セルの末尾に &lt;!-- color:green --&gt; と記載してください)
+  (ルール: 志望度が★2以下の場合は、セルの末尾に &lt;!-- color:red --&gt; と記載してください)
+- 選考ステップ
+- インターン締切日
+  (ルール: 必ずYYYY-MM-DDの形式にして、セルの末尾に &lt;!-- var_deadline: YYYY-MM-DD --&gt; と記載してください)</code></pre>
+                <p style="margin-top: 16px;">このルールを適用することで、AIは以下のようなMarkdownの生テキストのみを出力し、コピー＆ペーストで一発で当アプリに取り込めるようになります。</p>
+                <pre style="background: #1e293b; color: #e2e8f0; padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 0.85rem; margin-top: 8px;"><code>| 企業名 | 業界 | 職種 | 初任給（万円） | 志望度 | 選考ステップ | インターン締切日 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 株式会社サンプル | #IT | #エンジニア | 25 &lt;!-- var_salary: 25 --&gt; | ★★★★ &lt;!-- var_star: 4 --&gt;&lt;!-- color:green --&gt; | ES -> 1次面接 -> 最終面接 | 12月20日 &lt;!-- var_deadline: 2026-12-20 --&gt; |</code></pre>
+            </div>
+            <div class="modal-footer">
+                <button class="btn primary" onclick="document.getElementById('help-modal').style.display='none'">閉じる</button>
             </div>
         </div>
     </div>

@@ -111,6 +111,14 @@ toggleCalendarBtn.addEventListener('click', () => {
     }
 });
 
+const closeCalendarBtn = document.getElementById('close-calendar-btn');
+if (closeCalendarBtn) {
+    closeCalendarBtn.addEventListener('click', () => {
+        calendarSection.style.display = 'none';
+        toggleCalendarBtn.textContent = '📅 カレンダー表示';
+    });
+}
+
 // --- Calendar Logic ---
 function initCalendar() {
     if (typeof FullCalendar === 'undefined') return;
@@ -123,7 +131,32 @@ function initCalendar() {
             center: 'title',
             right: 'dayGridMonth,listMonth'
         },
-        events: getCalendarEvents()
+        events: getCalendarEvents(),
+        dateClick: async function(info) {
+            const title = prompt("追加する予定を入力してください:");
+            if (title) {
+                const newItem = {
+                    id: Date.now() + Math.random().toString(36).substr(2, 9),
+                    "企業名": title,
+                    createdAt: new Date().toISOString(),
+                    isHidden: false,
+                    memo: "",
+                    _meta: { deadline: info.dateStr, isCustomEvent: true }
+                };
+                
+                if (auth && auth.currentUser) {
+                    await addDoc(collection(db, "users", auth.currentUser.uid, "companies"), newItem);
+                } else {
+                    mockData.push(newItem);
+                    localStorage.setItem('mockData', JSON.stringify(mockData));
+                    loadData();
+                }
+            }
+        },
+        eventClick: function(info) {
+            // イベントクリックで対象企業・予定の編集または削除ができてもよいが、今回は簡易表示
+            alert('予定: ' + info.event.title);
+        }
     });
     calendarInstance.render();
 }
@@ -234,7 +267,14 @@ logoutBtn.addEventListener('click', () => {
 });
 
 let formatBuilderData = [
-    { id: Date.now(), name: "", type: "text", condition: "", color: "green" }
+    { id: Date.now(), name: "", attributes: [] }
+];
+
+const availableColors = [
+    {val: 'red', label: '赤色'}, {val: 'orange', label: '橙色'}, {val: 'yellow', label: '黄色'},
+    {val: 'green', label: '緑色'}, {val: 'teal', label: '青緑(ティール)'}, {val: 'cyan', label: '水色'},
+    {val: 'blue', label: '青色'}, {val: 'indigo', label: '藍色'}, {val: 'violet', label: '紫色'},
+    {val: 'magenta', label: '赤紫(マゼンタ)'}, {val: 'pink', label: 'ピンク'}, {val: 'gray', label: '灰色'}
 ];
 
 function renderFormatBuilder() {
@@ -242,11 +282,17 @@ function renderFormatBuilder() {
     formatBuilderData.forEach((item, index) => {
         const row = document.createElement('div');
         row.style.display = 'flex';
+        row.style.flexDirection = 'column';
         row.style.gap = '8px';
-        row.style.alignItems = 'center';
         row.style.background = 'var(--bg-alt)';
-        row.style.padding = '8px';
+        row.style.padding = '12px';
         row.style.borderRadius = '4px';
+        row.style.border = '1px solid var(--border-color)';
+        
+        const topRow = document.createElement('div');
+        topRow.style.display = 'flex';
+        topRow.style.gap = '8px';
+        topRow.style.alignItems = 'center';
 
         const nameInput = document.createElement('input');
         nameInput.type = 'text';
@@ -256,55 +302,13 @@ function renderFormatBuilder() {
         nameInput.style.padding = "6px";
         nameInput.addEventListener('input', (e) => { item.name = e.target.value; });
 
-        const typeSelect = document.createElement('select');
-        typeSelect.style.padding = "6px";
-        const types = [
-            {val: "text", label: "通常テキスト"},
-            {val: "hashtag", label: "# ハッシュタグ化"},
-            {val: "color", label: "🎨 色付け条件"},
-            {val: "variable", label: "📊 変数(数値・日付等)"}
-        ];
-        types.forEach(t => {
-            const opt = document.createElement('option');
-            opt.value = t.val;
-            opt.textContent = t.label;
-            if (item.type === t.val) opt.selected = true;
-            typeSelect.appendChild(opt);
-        });
-        
-        const extraContainer = document.createElement('div');
-        extraContainer.style.display = 'flex';
-        extraContainer.style.gap = '4px';
-        
-        const renderExtra = () => {
-            extraContainer.innerHTML = "";
-            if (item.type === "color") {
-                const condInput = document.createElement('input');
-                condInput.type = 'text';
-                condInput.placeholder = "条件(例: ★4以上)";
-                condInput.value = item.condition || "";
-                condInput.style.width = "120px";
-                condInput.addEventListener('input', (e) => item.condition = e.target.value);
-                
-                const colSelect = document.createElement('select');
-                ['green', 'yellow', 'red'].forEach(c => {
-                    const opt = document.createElement('option');
-                    opt.value = c;
-                    opt.textContent = c === 'green' ? '緑' : c === 'yellow' ? '黄' : '赤';
-                    if (item.color === c) opt.selected = true;
-                    colSelect.appendChild(opt);
-                });
-                colSelect.addEventListener('change', (e) => item.color = e.target.value);
-                
-                extraContainer.appendChild(condInput);
-                extraContainer.appendChild(colSelect);
-            }
-        };
-        renderExtra();
-        
-        typeSelect.addEventListener('change', (e) => {
-            item.type = e.target.value;
-            renderExtra();
+        const addAttrBtn = document.createElement('button');
+        addAttrBtn.textContent = '+ 属性・ルールを追加';
+        addAttrBtn.className = 'btn text';
+        addAttrBtn.style.fontSize = '0.8rem';
+        addAttrBtn.addEventListener('click', () => {
+            item.attributes.push({ type: 'hashtag', condition: '', color: 'red' });
+            renderFormatBuilder();
         });
 
         const delBtn = document.createElement('button');
@@ -315,16 +319,104 @@ function renderFormatBuilder() {
             renderFormatBuilder();
         });
 
-        row.appendChild(nameInput);
-        row.appendChild(typeSelect);
-        row.appendChild(extraContainer);
-        row.appendChild(delBtn);
+        topRow.appendChild(nameInput);
+        topRow.appendChild(addAttrBtn);
+        topRow.appendChild(delBtn);
+        row.appendChild(topRow);
+
+        // Attributes container
+        if (item.attributes.length > 0) {
+            const attrContainer = document.createElement('div');
+            attrContainer.style.display = 'flex';
+            attrContainer.style.flexDirection = 'column';
+            attrContainer.style.gap = '4px';
+            attrContainer.style.paddingLeft = '12px';
+            attrContainer.style.borderLeft = '2px solid var(--border-color)';
+            
+            item.attributes.forEach((attr, attrIdx) => {
+                const attrRow = document.createElement('div');
+                attrRow.style.display = 'flex';
+                attrRow.style.gap = '8px';
+                attrRow.style.alignItems = 'center';
+
+                const typeSelect = document.createElement('select');
+                typeSelect.style.padding = "4px";
+                typeSelect.style.fontSize = "0.85rem";
+                const types = [
+                    {val: "hashtag", label: "# ハッシュタグ化"},
+                    {val: "color", label: "🎨 色付け条件"},
+                    {val: "variable", label: "📊 変数(数値・日付等)"}
+                ];
+                types.forEach(t => {
+                    const opt = document.createElement('option');
+                    opt.value = t.val;
+                    opt.textContent = t.label;
+                    if (attr.type === t.val) opt.selected = true;
+                    typeSelect.appendChild(opt);
+                });
+
+                const extraDiv = document.createElement('div');
+                extraDiv.style.display = 'flex';
+                extraDiv.style.gap = '4px';
+                
+                const renderAttrExtra = () => {
+                    extraDiv.innerHTML = "";
+                    if (attr.type === "color") {
+                        const condInput = document.createElement('input');
+                        condInput.type = 'text';
+                        condInput.placeholder = "条件(例: ★4以上)";
+                        condInput.value = attr.condition || "";
+                        condInput.style.width = "120px";
+                        condInput.style.fontSize = "0.85rem";
+                        condInput.style.padding = "4px";
+                        condInput.addEventListener('input', (e) => attr.condition = e.target.value);
+                        
+                        const colSelect = document.createElement('select');
+                        colSelect.style.fontSize = "0.85rem";
+                        colSelect.style.padding = "4px";
+                        availableColors.forEach(c => {
+                            const opt = document.createElement('option');
+                            opt.value = c.val;
+                            opt.textContent = c.label;
+                            if (attr.color === c.val) opt.selected = true;
+                            colSelect.appendChild(opt);
+                        });
+                        colSelect.addEventListener('change', (e) => attr.color = e.target.value);
+                        
+                        extraDiv.appendChild(condInput);
+                        extraDiv.appendChild(colSelect);
+                    }
+                };
+                renderAttrExtra();
+                
+                typeSelect.addEventListener('change', (e) => {
+                    attr.type = e.target.value;
+                    renderAttrExtra();
+                });
+
+                const removeAttrBtn = document.createElement('button');
+                removeAttrBtn.textContent = '✕';
+                removeAttrBtn.className = 'icon-btn';
+                removeAttrBtn.style.fontSize = '0.7rem';
+                removeAttrBtn.addEventListener('click', () => {
+                    item.attributes.splice(attrIdx, 1);
+                    renderFormatBuilder();
+                });
+
+                attrRow.appendChild(typeSelect);
+                attrRow.appendChild(extraDiv);
+                attrRow.appendChild(removeAttrBtn);
+                attrContainer.appendChild(attrRow);
+            });
+            row.appendChild(attrContainer);
+        }
+
         formatItemsList.appendChild(row);
     });
 }
 
 addFormatItemBtn.addEventListener('click', () => {
-    formatBuilderData.push({ id: Date.now(), name: "", type: "text", condition: "", color: "green" });
+    formatBuilderData.push({ id: Date.now(), name: "", attributes: [] });
     renderFormatBuilder();
 });
 
@@ -371,21 +463,32 @@ generateFormatBtn.addEventListener('click', async () => {
     const dividers = ["---", ...validItems.map(() => "---")].join(" | ");
     
     let prompt = `以下の企業情報を調査・整理し、【必ずMarkdownテーブル形式のみ】で出力してください。
-挨拶や追加の解説、補足事項は【一切不要】です。テーブルだけを出力してください。
-重要なことなので2回言います。Markdownの表以外の文章は【絶対に書かないで】ください。\n`;
+【厳重注意】
+・見やすい表形式などのリッチテキスト装飾は【絶対に】禁じます。
+・挨拶や追加の解説、補足事項は【一切不要】です。テーブルのテキストのみを出力してください。
+・機械が処理しやすい純粋なMarkdownテキストとして出力することが必須条件です。\n`;
 
     let rulesText = "";
     let varCount = 1;
     validItems.forEach(item => {
-        if (item.type === "hashtag") {
-            rulesText += `- 「${item.name}」の列については、重要なキーワードに必ず「#IT」「#BtoB」のようにハッシュタグを付けて出力してください。\n`;
-        } else if (item.type === "color" && item.condition) {
-            rulesText += `- 「${item.name}」の列について、「${item.condition}」に該当する場合は、セルの文章の末尾に必ず <!-- color:${item.color} --> と記述してください。\n`;
-        } else if (item.type === "variable") {
-            const varName = `var_${varCount.toString().padStart(3, '0')}`;
-            item.varKey = varName; // 内部保持用
-            rulesText += `- 「${item.name}」の列については、値の末尾に必ず <!-- ${varName}: (抽出した数値や日付などの値) --> という隠しメタデータを追記してください。\n`;
-            varCount++;
+        if (!item.attributes || item.attributes.length === 0) return;
+        
+        let itemRules = "";
+        item.attributes.forEach(attr => {
+            if (attr.type === "hashtag") {
+                itemRules += `  - 重要なキーワードに必ず「#IT」「#BtoB」のようにハッシュタグを付けて出力すること\n`;
+            } else if (attr.type === "color" && attr.condition) {
+                // 12色の対応
+                itemRules += `  - 【絶対厳守】「${attr.condition}」に該当する場合は、セルの文章の末尾に必ず <!-- color:${attr.color} --> と記述すること。この例外処理を怠るとシステムが破壊されるため必ず守ること。\n`;
+            } else if (attr.type === "variable") {
+                const varName = `var_${varCount.toString().padStart(3, '0')}`;
+                itemRules += `  - 【絶対厳守】値の末尾に必ず <!-- ${varName}: (抽出した数値や日付などの値) --> という隠しメタデータを追記すること。この例外処理を怠るとシステムが破壊されるため必ず守ること。\n`;
+                varCount++;
+            }
+        });
+        
+        if (itemRules) {
+            rulesText += `- 「${item.name}」の列について:\n${itemRules}`;
         }
     });
 
@@ -701,10 +804,23 @@ function evaluateCondition(item, row) {
         targetValue = Object.values(item).join(' ').toLowerCase() + " " + (item.memo || "").toLowerCase();
         if (item._meta) targetValue += " " + Object.values(item._meta).join(' ');
     } else if (row.field === "_tags") {
-        // 全テキストからタグのみ抽出して結合
+        // 全テキストからハッシュタグのみ抽出して配列化
         const allText = Object.values(item).filter(v => typeof v === 'string').join(' ');
-        const tags = (allText.match(/#[^\s]+/g) || []).join(' ').toLowerCase();
-        targetValue = tags;
+        const tags = (allText.match(/#[^\s]+/g) || []).map(t => t.toLowerCase());
+        
+        let searchTags = row.value.split(/[\s,]+/).filter(t => t);
+        // 先頭に#がなければ付与する
+        searchTags = searchTags.map(t => t.startsWith('#') ? t.toLowerCase() : '#' + t.toLowerCase());
+        
+        let isMatch = false;
+        if (row.operator === "equals") {
+            // 指定したタグと完全に一致するセットを持っているか (完全一致は使いにくいので、すべて含まれるかで処理)
+            isMatch = searchTags.every(st => tags.includes(st)) && searchTags.length === tags.length;
+        } else {
+            // デフォルトは指定したタグが全て含まれるか (AND)
+            isMatch = searchTags.every(st => tags.some(t => t.includes(st)));
+        }
+        return row.not ? !isMatch : isMatch;
     } else if (row.field === "_bookmarked") {
         targetValue = !!item.isBookmarked;
     } else if (item._meta && item._meta[row.field] !== undefined) {
