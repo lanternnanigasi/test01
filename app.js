@@ -26,10 +26,10 @@ const importStatus = document.getElementById('import-status');
 const tableHead = document.getElementById('table-head');
 const tableBody = document.getElementById('table-body');
 
-const searchInput = document.getElementById('search-input');
-const doSearchBtn = document.getElementById('do-search-btn');
+const queryBuilderContainer = document.getElementById('query-builder-container');
+const addQueryRowBtn = document.getElementById('add-query-row-btn');
+const doQuerySearchBtn = document.getElementById('do-query-search-btn');
 const clearSearchBtn = document.getElementById('clear-search-btn');
-const searchModeRadios = document.querySelectorAll('input[name="search-mode"]');
 const searchIncludeHidden = document.getElementById('search-include-hidden');
 const sortSelect = document.getElementById('sort-select');
 const applySortBtn = document.getElementById('apply-sort-btn');
@@ -37,11 +37,19 @@ const quickTagsContainer = document.getElementById('quick-tags-container');
 const showHiddenCheckbox = document.getElementById('show-hidden-checkbox');
 const manageHiddenColumnsBtn = document.getElementById('manage-hidden-columns-btn');
 
-const formatItemsInput = document.getElementById('format-items-input');
-const formatRulesInput = document.getElementById('format-rules-input');
+const formatItemsList = document.getElementById('format-items-list');
+const addFormatItemBtn = document.getElementById('add-format-item-btn');
 const generateFormatBtn = document.getElementById('generate-format-btn');
 const formatOutput = document.getElementById('format-output');
 const copyFormatBtn = document.getElementById('copy-format-btn');
+
+// --- Edit Modal Elements ---
+const editModal = document.getElementById('edit-modal');
+const editModalTitle = document.getElementById('edit-modal-title');
+const editModalTextarea = document.getElementById('edit-modal-textarea');
+const editModalSaveBtn = document.getElementById('edit-modal-save-btn');
+let currentEditItemId = null;
+let currentEditField = null;
 
 const excelModeBtn = document.getElementById('excel-mode-btn');
 const tableContainer = document.querySelector('.table-container');
@@ -225,59 +233,164 @@ logoutBtn.addEventListener('click', () => {
     }
 });
 
+let formatBuilderData = [
+    { id: Date.now(), name: "", type: "text", condition: "", color: "green" }
+];
+
+function renderFormatBuilder() {
+    formatItemsList.innerHTML = "";
+    formatBuilderData.forEach((item, index) => {
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.gap = '8px';
+        row.style.alignItems = 'center';
+        row.style.background = 'var(--bg-alt)';
+        row.style.padding = '8px';
+        row.style.borderRadius = '4px';
+
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.placeholder = "項目名 (例: 志望度)";
+        nameInput.value = item.name;
+        nameInput.style.flex = "1";
+        nameInput.style.padding = "6px";
+        nameInput.addEventListener('input', (e) => { item.name = e.target.value; });
+
+        const typeSelect = document.createElement('select');
+        typeSelect.style.padding = "6px";
+        const types = [
+            {val: "text", label: "通常テキスト"},
+            {val: "hashtag", label: "# ハッシュタグ化"},
+            {val: "color", label: "🎨 色付け条件"},
+            {val: "variable", label: "📊 変数(数値・日付等)"}
+        ];
+        types.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.val;
+            opt.textContent = t.label;
+            if (item.type === t.val) opt.selected = true;
+            typeSelect.appendChild(opt);
+        });
+        
+        const extraContainer = document.createElement('div');
+        extraContainer.style.display = 'flex';
+        extraContainer.style.gap = '4px';
+        
+        const renderExtra = () => {
+            extraContainer.innerHTML = "";
+            if (item.type === "color") {
+                const condInput = document.createElement('input');
+                condInput.type = 'text';
+                condInput.placeholder = "条件(例: ★4以上)";
+                condInput.value = item.condition || "";
+                condInput.style.width = "120px";
+                condInput.addEventListener('input', (e) => item.condition = e.target.value);
+                
+                const colSelect = document.createElement('select');
+                ['green', 'yellow', 'red'].forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c;
+                    opt.textContent = c === 'green' ? '緑' : c === 'yellow' ? '黄' : '赤';
+                    if (item.color === c) opt.selected = true;
+                    colSelect.appendChild(opt);
+                });
+                colSelect.addEventListener('change', (e) => item.color = e.target.value);
+                
+                extraContainer.appendChild(condInput);
+                extraContainer.appendChild(colSelect);
+            }
+        };
+        renderExtra();
+        
+        typeSelect.addEventListener('change', (e) => {
+            item.type = e.target.value;
+            renderExtra();
+        });
+
+        const delBtn = document.createElement('button');
+        delBtn.textContent = '✕';
+        delBtn.className = 'icon-btn';
+        delBtn.addEventListener('click', () => {
+            formatBuilderData = formatBuilderData.filter(d => d.id !== item.id);
+            renderFormatBuilder();
+        });
+
+        row.appendChild(nameInput);
+        row.appendChild(typeSelect);
+        row.appendChild(extraContainer);
+        row.appendChild(delBtn);
+        formatItemsList.appendChild(row);
+    });
+}
+
+addFormatItemBtn.addEventListener('click', () => {
+    formatBuilderData.push({ id: Date.now(), name: "", type: "text", condition: "", color: "green" });
+    renderFormatBuilder();
+});
+
 async function loadSettings() {
     if (auth && auth.currentUser) {
         try {
             const docSnap = await getDocs(collection(db, "users", auth.currentUser.uid, "settings"));
             docSnap.forEach(d => {
-                if (d.id === "format") {
-                    if (d.data().items) formatItemsInput.value = d.data().items;
-                    if (d.data().rules) formatRulesInput.value = d.data().rules;
+                if (d.id === "formatBuilder" && d.data().data) {
+                    formatBuilderData = JSON.parse(d.data().data);
                 }
             });
         } catch (e) {
             console.error(e);
         }
     } else {
-        const savedFormat = localStorage.getItem('formatItems');
-        if (savedFormat) formatItemsInput.value = savedFormat;
-        const savedRules = localStorage.getItem('formatRules');
-        if (savedRules) formatRulesInput.value = savedRules;
+        const saved = localStorage.getItem('formatBuilderData');
+        if (saved) formatBuilderData = JSON.parse(saved);
     }
+    renderFormatBuilder();
 }
 
 // --- Format Generator Logic ---
 generateFormatBtn.addEventListener('click', async () => {
-    const itemsText = formatItemsInput.value.trim();
-    const rulesText = formatRulesInput.value.trim();
-    
-    if (!itemsText) {
-        alert("抽出したい項目名を入力してください！");
+    const validItems = formatBuilderData.filter(d => d.name.trim() !== "");
+    if (validItems.length === 0) {
+        alert("抽出したい項目名を1つ以上入力してください！");
         return;
     }
     
     // Save settings
+    const dataStr = JSON.stringify(formatBuilderData);
     if (auth && auth.currentUser) {
         try {
-            const docRef = doc(db, "users", auth.currentUser.uid, "settings", "format");
-            await updateDoc(docRef, { items: itemsText, rules: rulesText }).catch(async () => {
-                await addDoc(collection(db, "users", auth.currentUser.uid, "settings"), { items: itemsText, rules: rulesText });
+            const docRef = doc(db, "users", auth.currentUser.uid, "settings", "formatBuilder");
+            await updateDoc(docRef, { data: dataStr }).catch(async () => {
+                await addDoc(collection(db, "users", auth.currentUser.uid, "settings"), { data: dataStr });
             });
         } catch (e) {}
     }
-    localStorage.setItem('formatItems', itemsText);
-    localStorage.setItem('formatRules', rulesText);
+    localStorage.setItem('formatBuilderData', dataStr);
 
-    const items = itemsText.split(/[,、]/).map(s => s.trim()).filter(s => s);
-    const headers = ["企業名", ...items].join(" | ");
-    const dividers = ["---", ...items.map(() => "---")].join(" | ");
+    const headers = ["企業名", ...validItems.map(d => d.name)].join(" | ");
+    const dividers = ["---", ...validItems.map(() => "---")].join(" | ");
     
     let prompt = `以下の企業情報を調査・整理し、【必ずMarkdownテーブル形式のみ】で出力してください。
 挨拶や追加の解説、補足事項は【一切不要】です。テーブルだけを出力してください。
 重要なことなので2回言います。Markdownの表以外の文章は【絶対に書かないで】ください。\n`;
 
+    let rulesText = "";
+    let varCount = 1;
+    validItems.forEach(item => {
+        if (item.type === "hashtag") {
+            rulesText += `- 「${item.name}」の列については、重要なキーワードに必ず「#IT」「#BtoB」のようにハッシュタグを付けて出力してください。\n`;
+        } else if (item.type === "color" && item.condition) {
+            rulesText += `- 「${item.name}」の列について、「${item.condition}」に該当する場合は、セルの文章の末尾に必ず <!-- color:${item.color} --> と記述してください。\n`;
+        } else if (item.type === "variable") {
+            const varName = `var_${varCount.toString().padStart(3, '0')}`;
+            item.varKey = varName; // 内部保持用
+            rulesText += `- 「${item.name}」の列については、値の末尾に必ず <!-- ${varName}: (抽出した数値や日付などの値) --> という隠しメタデータを追記してください。\n`;
+            varCount++;
+        }
+    });
+
     if (rulesText) {
-        prompt += `\n【追加の出力ルール・指示】\n${rulesText}\n`;
+        prompt += `\n【各項目に対する追加の出力ルール・指示】\n${rulesText}\n`;
     }
 
     prompt += `
@@ -435,71 +548,240 @@ clearDataBtn.addEventListener('click', async () => {
     }
 });
 
-// --- Search & Filter & Sort Logic ---
-function doSearch() {
-    const q = searchInput.value.trim().toLowerCase();
-    const mode = document.querySelector('input[name="search-mode"]:checked').value;
-    const includeHidden = searchIncludeHidden.checked;
+// --- Query Builder & Search Logic ---
+let queryRows = [
+    { id: Date.now(), bracketOpen: false, not: false, field: "all", operator: "contains", value: "", bracketClose: false, logic: "AND" }
+];
 
-    currentData = [];
-    currentSearchQuery = q;
-
+function renderQueryBuilder() {
+    queryBuilderContainer.innerHTML = "";
+    
+    // 集計した利用可能なフィールドリスト
+    const availableFields = new Set();
     mockData.forEach(item => {
-        if (!includeHidden && item.isHidden) return;
-
-        let isMatch = false;
-
-        if (!q) {
-            isMatch = true;
-        } else {
-            const terms = q.split(/\s+/);
-            const textToSearch = Object.keys(item)
-                .filter(k => includeHidden || !hiddenColumns.includes(k))
-                .map(k => typeof item[k] === 'string' ? item[k].toLowerCase() : '')
-                .join(" ");
-
-            if (mode === "AND") {
-                isMatch = terms.every(term => textToSearch.includes(term));
-            } else {
-                isMatch = terms.some(term => textToSearch.includes(term));
+        Object.keys(item).forEach(k => {
+            if (!k.startsWith('_') && k !== 'id' && k !== 'userId' && k !== 'createdAt' && k !== 'isHidden') {
+                availableFields.add(k);
             }
+        });
+        if (item._meta) {
+            Object.keys(item._meta).forEach(k => availableFields.add(k));
         }
-
-        if (isMatch) currentData.push(item);
     });
-
-    renderTable(currentData);
+    
+    queryRows.forEach((row, index) => {
+        const rowDiv = document.createElement('div');
+        rowDiv.style.display = 'flex';
+        rowDiv.style.gap = '8px';
+        rowDiv.style.alignItems = 'center';
+        
+        // "("
+        const openCheck = document.createElement('label');
+        openCheck.style.fontSize = '0.9rem';
+        openCheck.style.display = 'flex';
+        openCheck.style.alignItems = 'center';
+        openCheck.style.gap = '4px';
+        openCheck.innerHTML = `<input type="checkbox" ${row.bracketOpen ? 'checked' : ''}> (`;
+        openCheck.querySelector('input').addEventListener('change', (e) => { row.bracketOpen = e.target.checked; });
+        
+        // NOT
+        const notCheck = document.createElement('label');
+        notCheck.style.fontSize = '0.9rem';
+        notCheck.style.display = 'flex';
+        notCheck.style.alignItems = 'center';
+        notCheck.style.gap = '4px';
+        notCheck.innerHTML = `<input type="checkbox" ${row.not ? 'checked' : ''}> NOT`;
+        notCheck.querySelector('input').addEventListener('change', (e) => { row.not = e.target.checked; });
+        
+        // Field Select
+        const fieldSelect = document.createElement('select');
+        fieldSelect.style.padding = '4px';
+        fieldSelect.innerHTML = `<option value="all">すべて検索</option>
+                                 <option value="_tags">タグ(#...)</option>
+                                 <option value="_bookmarked">ブックマーク済</option>`;
+        Array.from(availableFields).forEach(f => {
+            fieldSelect.innerHTML += `<option value="${f}">${f}</option>`;
+        });
+        fieldSelect.value = row.field;
+        fieldSelect.addEventListener('change', (e) => { row.field = e.target.value; renderQueryBuilder(); });
+        
+        // Operator Select
+        const opSelect = document.createElement('select');
+        opSelect.style.padding = '4px';
+        if (row.field === "_bookmarked") {
+            opSelect.innerHTML = `<option value="is_true">である</option>`;
+            row.operator = "is_true";
+        } else {
+            opSelect.innerHTML = `
+                <option value="contains">を含む</option>
+                <option value="equals">と一致</option>
+                <option value="gt">＞ (より大きい)</option>
+                <option value="lt">＜ (より小さい)</option>
+                <option value="gte">≧ (以上)</option>
+                <option value="lte">≦ (以下)</option>
+            `;
+            opSelect.value = row.operator;
+        }
+        opSelect.addEventListener('change', (e) => { row.operator = e.target.value; });
+        
+        // Value Input
+        const valInput = document.createElement('input');
+        valInput.type = 'text';
+        valInput.placeholder = "値";
+        valInput.value = row.value;
+        valInput.style.padding = '4px';
+        valInput.style.flex = '1';
+        if (row.field === "_bookmarked") valInput.style.display = 'none';
+        valInput.addEventListener('input', (e) => { row.value = e.target.value; });
+        
+        // ")"
+        const closeCheck = document.createElement('label');
+        closeCheck.style.fontSize = '0.9rem';
+        closeCheck.style.display = 'flex';
+        closeCheck.style.alignItems = 'center';
+        closeCheck.style.gap = '4px';
+        closeCheck.innerHTML = `<input type="checkbox" ${row.bracketClose ? 'checked' : ''}> )`;
+        closeCheck.querySelector('input').addEventListener('change', (e) => { row.bracketClose = e.target.checked; });
+        
+        // AND/OR (最後の行以外)
+        const logicSelect = document.createElement('select');
+        logicSelect.style.padding = '4px';
+        logicSelect.innerHTML = `<option value="AND">AND</option><option value="OR">OR</option>`;
+        logicSelect.value = row.logic;
+        logicSelect.addEventListener('change', (e) => { row.logic = e.target.value; });
+        if (index === queryRows.length - 1) logicSelect.style.visibility = 'hidden';
+        
+        // 削除ボタン
+        const delBtn = document.createElement('button');
+        delBtn.textContent = '✕';
+        delBtn.className = 'icon-btn';
+        delBtn.addEventListener('click', () => {
+            queryRows.splice(index, 1);
+            if (queryRows.length === 0) {
+                queryRows.push({ id: Date.now(), bracketOpen: false, not: false, field: "all", operator: "contains", value: "", bracketClose: false, logic: "AND" });
+            }
+            renderQueryBuilder();
+        });
+        
+        rowDiv.appendChild(openCheck);
+        rowDiv.appendChild(notCheck);
+        rowDiv.appendChild(fieldSelect);
+        rowDiv.appendChild(opSelect);
+        rowDiv.appendChild(valInput);
+        rowDiv.appendChild(closeCheck);
+        rowDiv.appendChild(logicSelect);
+        rowDiv.appendChild(delBtn);
+        
+        queryBuilderContainer.appendChild(rowDiv);
+    });
 }
 
-searchModeRadios.forEach(radio => radio.addEventListener('change', applyFiltersAndRender));
-applySortBtn.addEventListener('click', applyFiltersAndRender);
-showHiddenCheckbox.addEventListener('change', applyFiltersAndRender);
+addQueryRowBtn.addEventListener('click', () => {
+    queryRows.push({ id: Date.now(), bracketOpen: false, not: false, field: "all", operator: "contains", value: "", bracketClose: false, logic: "AND" });
+    renderQueryBuilder();
+});
 
 clearSearchBtn.addEventListener('click', () => {
-    searchInput.value = "";
-    currentSearchQuery = "";
+    queryRows = [{ id: Date.now(), bracketOpen: false, not: false, field: "all", operator: "contains", value: "", bracketClose: false, logic: "AND" }];
+    renderQueryBuilder();
     applyFiltersAndRender();
 });
 
-function applyFiltersAndRender() {
-    const isAnd = document.querySelector('input[name="search-mode"]:checked').value === "AND";
-    const terms = currentSearchQuery.replace(/　/g, ' ').split(/\s+/).filter(t => t);
-    const showHidden = showHiddenCheckbox.checked;
+doQuerySearchBtn.addEventListener('click', () => {
+    applyFiltersAndRender();
+});
+
+applySortBtn.addEventListener('click', applyFiltersAndRender);
+showHiddenCheckbox.addEventListener('change', applyFiltersAndRender);
+
+function evaluateCondition(item, row) {
+    let targetValue = "";
     
-    // 1. Filter
-    let filteredData = currentData.filter(item => {
+    if (row.field === "all") {
+        targetValue = Object.values(item).join(' ').toLowerCase() + " " + (item.memo || "").toLowerCase();
+        if (item._meta) targetValue += " " + Object.values(item._meta).join(' ');
+    } else if (row.field === "_tags") {
+        // 全テキストからタグのみ抽出して結合
+        const allText = Object.values(item).filter(v => typeof v === 'string').join(' ');
+        const tags = (allText.match(/#[^\s]+/g) || []).join(' ').toLowerCase();
+        targetValue = tags;
+    } else if (row.field === "_bookmarked") {
+        targetValue = !!item.isBookmarked;
+    } else if (item._meta && item._meta[row.field] !== undefined) {
+        targetValue = item._meta[row.field];
+    } else {
+        targetValue = item[row.field] || "";
+    }
+    
+    let isMatch = false;
+    let v1 = targetValue;
+    let v2 = row.value;
+    
+    if (row.operator === "is_true") {
+        isMatch = !!v1;
+    } else if (row.operator === "contains") {
+        isMatch = String(v1).toLowerCase().includes(String(v2).toLowerCase());
+    } else if (row.operator === "equals") {
+        isMatch = String(v1).toLowerCase() === String(v2).toLowerCase();
+    } else {
+        // 数値比較を試みる
+        const num1 = Number(v1);
+        const num2 = Number(v2);
+        if (!isNaN(num1) && !isNaN(num2)) {
+            v1 = num1; v2 = num2;
+        }
+        if (row.operator === "gt") isMatch = v1 > v2;
+        else if (row.operator === "lt") isMatch = v1 < v2;
+        else if (row.operator === "gte") isMatch = v1 >= v2;
+        else if (row.operator === "lte") isMatch = v1 <= v2;
+    }
+    
+    return row.not ? !isMatch : isMatch;
+}
+
+function applyFiltersAndRender() {
+    const showHidden = searchIncludeHidden.checked;
+    
+    let filteredData = mockData.filter(item => {
         if (item.isHidden && !showHidden) return false;
         
-        if (terms.length > 0) {
-            const fullText = Object.values(item).join(' ').toLowerCase() + " " + (item.memo || "").toLowerCase();
-            if (isAnd) {
-                return terms.every(term => fullText.includes(term.toLowerCase()));
-            } else {
-                return terms.some(term => fullText.includes(term.toLowerCase()));
+        // Evaluate query rows
+        // Build a javascript boolean expression string and eval it
+        let expr = "";
+        let hasConditions = false;
+        
+        for (let i = 0; i < queryRows.length; i++) {
+            const row = queryRows[i];
+            if (row.field !== "_bookmarked" && row.value.trim() === "") {
+                continue; // 値が空の条件は無視
+            }
+            hasConditions = true;
+            
+            const res = evaluateCondition(item, row);
+            
+            if (row.bracketOpen) expr += "(";
+            expr += res ? "true" : "false";
+            if (row.bracketClose) expr += ")";
+            
+            if (i < queryRows.length - 1) {
+                expr += row.logic === "AND" ? " && " : " || ";
             }
         }
-        return true;
+        
+        // 末尾が演算子で終わってしまった場合のトリミング
+        expr = expr.replace(/(&&|\|\|)\s*$/, "");
+        
+        if (!hasConditions) return true; // 条件指定なしは全件表示
+        
+        try {
+            return eval(expr);
+        } catch (e) {
+            console.error("Query evaluation error", expr);
+            return true; // 文法エラー（括弧の不一致など）の場合はとりあえず表示
+        }
     });
+    
+    currentData = filteredData;
     
     // 2. Sort
     const sortVal = sortSelect.value;
@@ -752,18 +1034,48 @@ function renderTable(data) {
                 // 本文
                 const contentDiv = document.createElement('div');
                 contentDiv.className = 'cell-content';
-                contentDiv.textContent = text;
+                
+                // ブックマーク機能 (企業名の列に配置)
+                if (h === companyKey) {
+                    const bookmarkBtn = document.createElement('span');
+                    bookmarkBtn.className = 'bookmark-btn';
+                    bookmarkBtn.style.cursor = 'pointer';
+                    bookmarkBtn.style.fontSize = '1.2rem';
+                    bookmarkBtn.style.marginRight = '8px';
+                    bookmarkBtn.textContent = item.isBookmarked ? '🔖' : '☆';
+                    bookmarkBtn.title = 'ブックマーク / ピン留め';
+                    bookmarkBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        updateItemData(item.id, { isBookmarked: !item.isBookmarked });
+                    });
+                    
+                    const textSpan = document.createElement('span');
+                    textSpan.textContent = text;
+                    contentDiv.appendChild(bookmarkBtn);
+                    contentDiv.appendChild(textSpan);
+                } else {
+                    contentDiv.textContent = text;
+                }
+                
                 td.appendChild(contentDiv);
                 
+                // Edit Function using Modal
+                const openEditModal = () => {
+                    currentEditItemId = item.id;
+                    currentEditField = h;
+                    editModalTitle.textContent = `「${h}」の編集`;
+                    editModalTextarea.value = (item[h] === "-" || !item[h]) ? "" : item[h];
+                    editModal.style.display = 'flex';
+                    editModalTextarea.focus();
+                };
+
                 // Right-click edit
                 td.addEventListener('contextmenu', (e) => {
                     if (e.target.tagName.toLowerCase() === 'a' || e.target.tagName.toLowerCase() === 'button') return;
                     e.preventDefault();
                     e.stopPropagation();
-                    const newText = prompt(`「${h}」の編集:`, text === "-" ? "" : text);
-                    if (newText !== null && newText !== text) {
-                        updateItemData(item.id, { [h]: newText.trim() });
-                    }
+                    openEditModal();
                 });
                 
                 // Long-press for mobile edit
@@ -772,10 +1084,7 @@ function renderTable(data) {
                     if (e.target.tagName.toLowerCase() === 'a' || e.target.tagName.toLowerCase() === 'button') return;
                     pressTimer = setTimeout(() => {
                         e.preventDefault();
-                        const newText = prompt(`「${h}」の編集:`, text === "-" ? "" : text);
-                        if (newText !== null && newText !== text) {
-                            updateItemData(item.id, { [h]: newText.trim() });
-                        }
+                        openEditModal();
                     }, 800);
                 }, { passive: true });
                 td.addEventListener('touchend', () => clearTimeout(pressTimer));
@@ -803,12 +1112,17 @@ function processMetaData(dataList) {
         Object.values(item).forEach(text => {
             if (typeof text === 'string') {
                 allText += text + " ";
-                const regex = /<!-- sort_(.*?):\s*(.*?) -->/g;
+                const regex = /<!-- (?:sort|var)_(.*?):\s*(.*?) -->/g;
                 let match;
                 while ((match = regex.exec(text)) !== null) {
-                    const key = match[1].trim();
+                    let key = match[1].trim();
+                    // var_ で始まった場合は var_ をキー名に含めて重複を防ぐ
+                    if (match[0].includes('<!-- var_')) {
+                        key = 'var_' + key;
+                    }
                     let val = match[2].trim();
-                    if (!isNaN(Number(val))) {
+                    // 日付(YYYY-MM-DD)の形式なら文字列のまま、それ以外で数値化できるなら数値化
+                    if (!val.match(/^\d{4}-\d{2}-\d{2}$/) && !isNaN(Number(val))) {
                         val = Number(val);
                     }
                     item._meta[key] = val;
@@ -863,10 +1177,14 @@ function loadData() {
             const data = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
             
             processMetaData(data);
+            
+            // Firebaseからロードした場合、mockDataを上書きしておくか、あるいはcurrentDataとして扱う
+            mockData = data; 
             currentData = data;
             
             renderQuickTags(currentData);
             updateCalendarEvents();
+            renderQueryBuilder(); // フィールド一覧の更新
             applyFiltersAndRender();
         });
     } else {
@@ -876,6 +1194,7 @@ function loadData() {
         
         renderQuickTags(currentData);
         updateCalendarEvents();
+        renderQueryBuilder(); // フィールド一覧の更新
         applyFiltersAndRender();
     }
 }
@@ -962,4 +1281,15 @@ document.addEventListener('keydown', (e) => {
     } else if (e.key === 'ArrowLeft') {
         tableContainer.scrollBy({ left: -150, behavior: 'smooth' });
     }
+});
+
+// --- Modal Save Logic ---
+editModalSaveBtn.addEventListener('click', () => {
+    const newText = editModalTextarea.value.trim();
+    if (currentEditItemId && currentEditField) {
+        updateItemData(currentEditItemId, { [currentEditField]: newText });
+    }
+    editModal.style.display = 'none';
+    currentEditItemId = null;
+    currentEditField = null;
 });

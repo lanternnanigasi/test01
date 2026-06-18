@@ -47,15 +47,18 @@
             <section class="glass-card format-section" style="margin-bottom: 24px;">
                 <h2>✨ AI抽出フォーマットの作成</h2>
                 <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 12px;">
-                    <div>
-                        <label style="font-size: 0.85rem; font-weight: 600; color: var(--text-color);">① 抽出したい項目（カンマ区切り）</label>
-                        <input type="text" id="format-items-input" placeholder="例: 企業名, 求める人物像, 選考ステップ, 志望度" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); margin-top: 4px;">
+                    <p style="font-size: 0.85rem; color: var(--text-color); opacity: 0.8;">抽出したい項目を追加し、それぞれの属性（タグ化やカスタム変数など）を設定してください。</p>
+                    
+                    <!-- Builder Container -->
+                    <div id="format-items-list" style="display: flex; flex-direction: column; gap: 12px;">
+                        <!-- JavaScriptで動的に項目が追加されます -->
                     </div>
-                    <div>
-                        <label style="font-size: 0.85rem; font-weight: 600; color: var(--text-color);">② AIへの追加ルール・指示（タグ付け、色付け、メタデータなど・任意）</label>
-                        <textarea id="format-rules-input" placeholder="例:&#10;- 業界や職種には「#IT」「#BtoB」のようにハッシュタグを付けてください。&#10;- 志望度が★4以上の場合は、セルの末尾に <!-- color:green --> と書いてください。&#10;- 締切日は必ず <!-- sort_deadline: 2026-03-01 --> のように書いてください。" style="width: 100%; height: 80px; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); margin-top: 4px; resize: vertical;"></textarea>
+                    
+                    <button id="add-format-item-btn" class="btn text" style="align-self: flex-start; margin-top: 4px; padding: 6px 12px; border: 1px dashed var(--border-color);">+ 項目を追加</button>
+                    
+                    <div style="margin-top: 12px; display: flex; justify-content: flex-end;">
+                        <button id="generate-format-btn" class="btn primary">フォーマット生成</button>
                     </div>
-                    <button id="generate-format-btn" class="btn primary" style="align-self: flex-start;">フォーマット生成</button>
                 </div>
                 <div style="position: relative;">
                     <textarea id="format-output" readonly placeholder="生成されたプロンプトがここに表示されます。コピーしてAIに貼り付けてください。" style="height: 100px; background: var(--bg-alt);"></textarea>
@@ -83,33 +86,35 @@
 
             <!-- Search & Filter Section -->
             <section class="glass-card search-section" style="margin-bottom: 24px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h2 style="margin:0; font-size: 1.1rem;">🔎 高度な条件検索 (クエリビルダー)</h2>
+                    <label style="cursor: pointer; font-size: 0.85rem;"><input type="checkbox" id="search-include-hidden"> 非表示も含める</label>
+                </div>
+                
+                <div id="query-builder-container" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; background: var(--bg-alt); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <!-- JavaScriptで検索条件の行が追加されます -->
+                </div>
+                
                 <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-bottom: 12px;">
-                    <div style="flex: 1; min-width: 250px; display: flex; gap: 8px;">
-                        <input type="text" id="search-input" placeholder="検索タグやキーワード (例: #BtoB #かさまし無し)" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(15,23,42,0.6); color: white; font-size: 1rem;">
-                        <button id="do-search-btn" class="btn primary" style="width: auto; padding: 0 20px;">検索</button>
-                    </div>
-                    <div style="display: flex; gap: 16px; align-items: center; color: var(--text-color); font-size: 0.9rem;">
-                        <label style="cursor: pointer;"><input type="radio" name="search-mode" value="AND" checked> AND</label>
-                        <label style="cursor: pointer;"><input type="radio" name="search-mode" value="OR"> OR</label>
-                        <label style="cursor: pointer; margin-left: 8px;"><input type="checkbox" id="search-include-hidden"> 非表示も含める</label>
-                    </div>
+                    <button id="add-query-row-btn" class="btn text" style="padding: 6px 12px; border: 1px dashed var(--border-color);">+ 条件を追加</button>
+                    <button id="do-query-search-btn" class="btn primary" style="width: auto; padding: 0 20px;">検索実行</button>
+                    <button id="clear-search-btn" class="btn secondary" style="width: auto;">クリア</button>
+                    
+                    <div style="flex: 1;"></div>
                     
                     <!-- DBMS Sort -->
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        <label style="font-size: 0.85rem; color: #cbd5e1;">並び替え:</label>
-                        <select id="sort-select" style="padding: 10px; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(15,23,42,0.6); color: white;">
+                        <label style="font-size: 0.85rem; color: var(--text-color);">並び替え:</label>
+                        <select id="sort-select" style="padding: 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-color); color: var(--text-color);">
                             <option value="created_desc">登録日が新しい順</option>
                             <option value="star_desc">志望度 (星) が高い順</option>
                             <option value="salary_desc">初任給・基本給が高い順</option>
                             <option value="years_desc">勤続年数が長い順</option>
                             <option value="deadline_asc">締切日が近い順</option>
                         </select>
-                        <button id="apply-sort-btn" class="btn primary" style="width: auto; padding: 10px 16px;">並べ替え適用</button>
+                        <button id="apply-sort-btn" class="btn primary" style="width: auto; padding: 8px 12px;">適用</button>
                     </div>
-
-                    <button id="clear-search-btn" class="btn text">クリア</button>
                 </div>
-                
                 <!-- Quick Tags -->
                 <div id="quick-tags-container" style="display: flex; flex-wrap: wrap; gap: 8px;">
                     <!-- Auto-generated tags will appear here -->
@@ -148,5 +153,22 @@
     </div>
 
     <script type="module" src="app.js"></script>
+
+    <!-- Edit Cell Modal -->
+    <div id="edit-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content glass-card" style="width: 600px; max-width: 95%;">
+            <div class="modal-header">
+                <h3 id="edit-modal-title">セルの編集</h3>
+                <button class="icon-btn" onclick="document.getElementById('edit-modal').style.display='none'">✕</button>
+            </div>
+            <div class="modal-body">
+                <textarea id="edit-modal-textarea" style="width: 100%; height: 250px; padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-alt); color: var(--text-color); resize: vertical; line-height: 1.6;"></textarea>
+                <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 8px;">
+                    <button class="btn secondary" onclick="document.getElementById('edit-modal').style.display='none'">キャンセル</button>
+                    <button id="edit-modal-save-btn" class="btn primary">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
