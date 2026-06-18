@@ -1,0 +1,421 @@
+:root {
+    --bg-color: #0f172a;
+    --text-color: #f8fafc;
+    --primary: #3b82f6;
+    --primary-hover: #2563eb;
+    --glass-bg: rgba(30, 41, 59, 0.7);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --danger: #ef4444;
+    --success: #10b981;
+    --warning: #f59e0b;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+    color: var(--text-color);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.screen {
+    display: none;
+    flex: 1;
+}
+
+.screen.active {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Glassmorphism */
+.glass-card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+}
+
+/* Auth */
+#auth-screen {
+    justify-content: center;
+    align-items: center;
+}
+
+.auth-card {
+    width: 100%;
+    max-width: 400px;
+}
+
+.auth-card h1 {
+    text-align: center;
+    margin-bottom: 8px;
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.auth-card p {
+    text-align: center;
+    color: #94a3b8;
+    margin-bottom: 24px;
+    font-size: 0.9rem;
+}
+
+.input-group {
+    margin-bottom: 16px;
+}
+
+.input-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 0.85rem;
+    color: #cbd5e1;
+}
+
+.input-group input {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--glass-border);
+    background: rgba(15, 23, 42, 0.5);
+    color: white;
+    font-size: 1rem;
+    transition: all 0.2s;
+}
+
+.input-group input:focus {
+    outline: none;
+    border-color: var(--primary);
+    background: rgba(15, 23, 42, 0.8);
+}
+
+/* Buttons */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+    font-size: 0.95rem;
+}
+
+.btn.primary {
+    background: var(--primary);
+    color: white;
+    width: 100%;
+}
+
+.btn.primary:hover {
+    background: var(--primary-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+.btn.text {
+    background: transparent;
+    color: #cbd5e1;
+}
+
+.btn.text:hover {
+    color: white;
+    background: rgba(255,255,255,0.1);
+}
+
+/* Navbar */
+.navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 32px;
+    background: rgba(15, 23, 42, 0.8);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--glass-border);
+}
+
+.navbar .logo {
+    font-weight: 700;
+    font-size: 1.2rem;
+    background: linear-gradient(to right, #60a5fa, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* Container */
+.container {
+    padding: 32px;
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
+    transition: all 0.3s;
+}
+
+/* Search Section */
+input[type="radio"], input[type="checkbox"] {
+    accent-color: var(--primary);
+}
+
+#search-input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.quick-tag-btn {
+    background: rgba(167, 139, 250, 0.2);
+    color: #d8b4fe;
+    border: 1px solid rgba(167, 139, 250, 0.4);
+    border-radius: 12px;
+    padding: 4px 10px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.quick-tag-btn:hover {
+    background: rgba(167, 139, 250, 0.4);
+    transform: scale(1.05);
+}
+
+/* Import Section */
+.import-section h2 {
+    margin-bottom: 8px;
+}
+
+.import-section p {
+    color: #94a3b8;
+    margin-bottom: 16px;
+    font-size: 0.9rem;
+}
+
+textarea {
+    width: 100%;
+    height: 150px;
+    background: rgba(15, 23, 42, 0.5);
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    padding: 16px;
+    color: white;
+    font-family: monospace;
+    resize: vertical;
+    margin-bottom: 16px;
+    transition: all 0.2s;
+}
+
+textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    background: rgba(15, 23, 42, 0.8);
+}
+
+#import-status {
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+.status-success { color: var(--success); }
+.status-error { color: var(--danger); }
+
+/* Table View */
+.table-container {
+    overflow-x: auto;
+    background: var(--glass-bg);
+    border-radius: 12px;
+    border: 1px solid var(--glass-border);
+    transition: all 0.3s ease;
+    cursor: grab; /* ドラッグスクロール用 */
+}
+.table-container:active {
+    cursor: grabbing;
+}
+
+/* Excel Mode (Fullscreen) */
+.table-container.excel-mode {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 9999;
+    border-radius: 0;
+    background: var(--bg-color); 
+    padding: 16px;
+    overflow: auto;
+}
+
+.excel-mode-header {
+    display: none;
+}
+.table-container.excel-mode .excel-mode-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    align-items: center;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed; /* カラム幅を強制 */
+    min-width: 100%;
+}
+
+th, td {
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--glass-border);
+    vertical-align: top;
+    min-width: 180px; /* ★ここで全カラムの最低幅を広げ、縦長化を防ぐ */
+    max-width: 300px; /* 広がりすぎも防ぐ */
+}
+
+th {
+    background: rgba(0, 0, 0, 0.2);
+    font-weight: 600;
+    color: #cbd5e1;
+    font-size: 0.85rem;
+    white-space: normal; 
+}
+
+/* Row states */
+tbody tr.is-hidden {
+    opacity: 0.4;
+    background: rgba(0,0,0,0.5);
+}
+
+tbody tr {
+    transition: background-color 0.2s;
+}
+
+tbody tr:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* Standard Mode wrapping */
+td {
+    font-size: 0.9rem;
+    cursor: pointer; 
+}
+
+.cell-content {
+    display: -webkit-box;
+    -webkit-line-clamp: 3; 
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    white-space: pre-wrap; 
+    line-height: 1.5;
+    transition: all 0.3s ease;
+    margin-top: 4px;
+}
+
+.cell-content.expanded {
+    display: block;
+    -webkit-line-clamp: unset;
+}
+
+/* Cell tags container (rendered above content) */
+.cell-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 6px;
+}
+.cell-tags .tag {
+    color: #a78bfa;
+    font-weight: 500;
+    font-size: 0.8rem;
+    background: rgba(167, 139, 250, 0.15);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+/* Excel Mode expanding */
+.table-container.excel-mode td {
+    max-width: none;
+}
+.table-container.excel-mode .cell-content {
+    display: block;
+    -webkit-line-clamp: unset;
+}
+
+.external-link {
+    color: #60a5fa;
+    text-decoration: none;
+    margin-right: 8px;
+    background: rgba(96, 165, 250, 0.1);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    transition: all 0.2s;
+    display: inline-block;
+    margin-bottom: 4px;
+    white-space: nowrap;
+}
+.external-link:hover {
+    background: rgba(96, 165, 250, 0.2);
+    color: #93c5fd;
+}
+
+/* Action cell specific */
+.action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.action-btn-small {
+    background: rgba(255,255,255,0.1);
+    border: none;
+    color: #cbd5e1;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    text-align: center;
+}
+.action-btn-small:hover {
+    background: rgba(255,255,255,0.2);
+}
+.action-btn-danger {
+    color: #fca5a5;
+    background: rgba(239,68,68,0.2);
+}
+.action-btn-danger:hover {
+    background: rgba(239,68,68,0.4);
+}
+
+/* Calendar customization */
+.fc-theme-standard td, .fc-theme-standard th {
+    border-color: rgba(255,255,255,0.1);
+}
+.fc-daygrid-day-number {
+    color: #cbd5e1;
+}
+.fc-col-header-cell-cushion {
+    color: #f8fafc;
+}
+.fc-event {
+    cursor: pointer;
+    background: var(--primary);
+    border: none;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .container {
+        padding: 16px;
+    }
+    .navbar {
+        padding: 12px 16px;
+    }
+}

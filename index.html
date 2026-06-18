@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>就活コンパニオン</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FullCalendar CDN -->
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js'></script>
+</head>
+<body>
+    <!-- Auth Screen -->
+    <div id="auth-screen" class="screen active">
+        <div class="glass-card auth-card">
+            <h1>就活コンパニオン</h1>
+            <p>サインインして専用ダッシュボードにアクセス</p>
+            <form id="login-form">
+                <div class="input-group">
+                    <label>メールアドレス</label>
+                    <input type="email" id="email" required>
+                </div>
+                <div class="input-group">
+                    <label>パスワード</label>
+                    <input type="password" id="password" required>
+                </div>
+                <button type="submit" class="btn primary">ログイン</button>
+            </form>
+            <div style="margin-top: 1rem; text-align: center; font-size: 0.8rem;">
+                <a href="#" id="show-signup" style="color: #60a5fa;">新規アカウント作成（初回設定用）</a>
+            </div>
+            <div id="auth-warning" style="margin-top: 1rem; font-size: 0.75rem; color: var(--warning); text-align: center;">
+                ※現在ローカルテストモード（MOCK）で動作しています。Firebaseのキーを設定するとクラウド同期が有効になります。
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Dashboard -->
+    <div id="main-screen" class="screen">
+        <nav class="navbar">
+            <div class="logo">就活コンパニオン</div>
+            <button id="logout-btn" class="btn text">ログアウト</button>
+        </nav>
+
+        <div class="container">
+            <!-- Data Import Section -->
+            <section class="glass-card import-section" style="margin-bottom: 24px;">
+                <h2>AIテキストインポート</h2>
+                <p>AIが出力したMarkdownテーブルを貼り付けてください。メタデータとタグが自動で処理されます。</p>
+                <textarea id="import-text" placeholder="| 項目 | 調査結果 |&#10;| --- | --- |&#10;| 企業名 | トヨタ自動車九州 |..."></textarea>
+                <div style="display: flex; align-items: center;">
+                    <button id="import-btn" class="btn primary" style="width: auto;">データ登録</button>
+                    <button id="clear-data-btn" class="btn text" style="color: var(--danger); margin-left: 16px;">全データをクリア (リセット)</button>
+                </div>
+                <div id="import-status"></div>
+            </section>
+
+            <!-- Calendar Section -->
+            <section class="glass-card" style="margin-bottom: 24px; display: none;" id="calendar-section">
+                <h2>カレンダー (締切日 / 面談日)</h2>
+                <div id='calendar' style="margin-top: 16px; background: rgba(15,23,42,0.5); padding: 16px; border-radius: 8px;"></div>
+            </section>
+
+            <!-- Search & Filter Section -->
+            <section class="glass-card search-section" style="margin-bottom: 24px;">
+                <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-bottom: 12px;">
+                    <div style="flex: 1; min-width: 250px; display: flex; gap: 8px;">
+                        <input type="text" id="search-input" placeholder="検索タグやキーワード (例: #BtoB #かさまし無し)" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(15,23,42,0.6); color: white; font-size: 1rem;">
+                        <button id="do-search-btn" class="btn primary" style="width: auto; padding: 0 20px;">検索</button>
+                    </div>
+                    <div style="display: flex; gap: 16px; align-items: center; color: #cbd5e1; font-size: 0.9rem;">
+                        <label style="cursor: pointer;"><input type="radio" name="search-mode" value="AND" checked> AND</label>
+                        <label style="cursor: pointer;"><input type="radio" name="search-mode" value="OR"> OR</label>
+                    </div>
+                    
+                    <!-- DBMS Sort -->
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <label style="font-size: 0.85rem; color: #cbd5e1;">並び替え:</label>
+                        <select id="sort-select" style="padding: 10px; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(15,23,42,0.6); color: white;">
+                            <option value="created_desc">登録日が新しい順</option>
+                            <option value="star_desc">志望度 (星) が高い順</option>
+                            <option value="salary_desc">初任給・基本給が高い順</option>
+                            <option value="years_desc">勤続年数が長い順</option>
+                            <option value="deadline_asc">締切日が近い順</option>
+                        </select>
+                        <button id="apply-sort-btn" class="btn primary" style="width: auto; padding: 10px 16px;">並べ替え適用</button>
+                    </div>
+
+                    <button id="clear-search-btn" class="btn text">クリア</button>
+                </div>
+                
+                <!-- Quick Tags -->
+                <div id="quick-tags-container" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                    <!-- Auto-generated tags will appear here -->
+                </div>
+            </section>
+
+            <!-- Dashboard / Table View -->
+            <section class="dashboard-section">
+                <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <div style="display: flex; align-items: center; gap: 16px;">
+                        <h2>企業リスト DBMS</h2>
+                        <label style="font-size: 0.85rem; color: #cbd5e1; cursor: pointer;">
+                            <input type="checkbox" id="show-hidden-checkbox"> 非表示(アーカイブ)にした企業も表示
+                        </label>
+                    </div>
+                    <div>
+                        <button id="toggle-calendar-btn" class="btn text" style="margin-right: 8px;">📅 カレンダー表示</button>
+                        <button id="excel-mode-btn" class="btn primary" style="width: auto; background: var(--success); color: #fff;">エクセルモード(全画面)</button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table id="companies-table">
+                        <thead>
+                            <tr id="table-head">
+                                <!-- Dynamically generated headers -->
+                            </tr>
+                        </thead>
+                        <tbody id="table-body">
+                            <!-- Dynamically generated rows -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>
