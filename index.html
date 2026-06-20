@@ -60,7 +60,10 @@
                         <!-- JavaScriptで動的に項目が追加されます -->
                     </div>
                     
-                    <button id="add-format-item-btn" class="btn text" style="align-self: flex-start; margin-top: 4px; padding: 6px 12px; border: 1px dashed var(--border-color);">+ 項目を追加</button>
+                    <div style="display: flex; gap: 12px; align-items: center; align-self: flex-start; margin-top: 4px;">
+                        <button id="add-format-item-btn" class="btn text" style="padding: 6px 12px; border: 1px dashed var(--border-color);">+ 項目を追加</button>
+                        <button id="open-archive-modal-btn" class="btn text" style="padding: 6px 12px; border: 1px dashed var(--border-color);" onclick="openFormatArchiveModal()">📚 アーカイブから追加</button>
+                    </div>
                     
                     <div style="margin-top: 12px; display: flex; justify-content: flex-end;">
                         <button id="generate-format-btn" class="btn primary">フォーマット生成</button>
@@ -77,10 +80,9 @@
                 <h2>AIテキストインポート</h2>
                 <p>AIが出力したMarkdownテーブルを貼り付けてください。メタデータとタグが自動で処理されます。</p>
                 <textarea id="import-text" placeholder="| 項目 | 調査結果 |&#10;| --- | --- |&#10;| 企業名 | トヨタ自動車九州 |..."></textarea>
-                <div style="display: flex; gap: 12px;">
-                    <button id="add-format-item-btn" class="btn secondary" style="width: auto;">+ 抽出項目を追加</button>
-                    <button id="open-archive-modal-btn" class="btn text" style="width: auto;" onclick="openFormatArchiveModal()">📚 アーカイブから追加</button>
-                </div>    <button id="clear-data-btn" class="btn text" style="color: var(--danger); margin-left: 16px;">全データをクリア (リセット)</button>
+                <div style="display: flex; gap: 12px; align-items: center;">
+                    <button id="import-btn" class="btn secondary" style="width: auto;">インポート</button>
+                    <button id="clear-data-btn" class="btn text" style="color: var(--danger); margin-left: auto;">全データをクリア (リセット)</button>
                 </div>
                 <div id="import-status"></div>
             </section>
