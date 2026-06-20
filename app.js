@@ -58,11 +58,16 @@ const toggleCalendarBtn = document.getElementById('toggle-calendar-btn');
 const calendarSection = document.getElementById('calendar-section');
 const calendarEl = document.getElementById('calendar');
 
+// Version Check
+console.log("【就活メモ】 アプリバージョン: v1.1.0 (2026-06-20版)");
+
 // State
 let isSignupMode = false;
 let mockUser = null;
 let mockData = []; 
+let mockCalendarData = []; // カレンダー専用データ (3次元ではないが、会社と完全に分ける) 
 let unsubscribeSnapshot = null;
+let unsubscribeCalendarSnapshot = null;
 let currentSearchQuery = "";
 let currentData = [];
 let calendarInstance = null;
@@ -152,29 +157,26 @@ calendarModalSaveBtn.addEventListener('click', async () => {
         let found = false;
         if (auth && auth.currentUser) {
             try {
-                const docRef = doc(db, "users", auth.currentUser.uid, "companies", currentEditingEventId);
-                await updateDoc(docRef, { "企業名": title, memo: memo, "_meta.deadline": dateStr });
+                const docRef = doc(db, "users", auth.currentUser.uid, "calendar", currentEditingEventId);
+                await updateDoc(docRef, { title: title, memo: memo, date: dateStr });
                 found = true;
             } catch (e) {
                 console.warn("Firestore updateDoc failed for calendar event:", e.message);
-                // Firestoreに存在しない場合、ローカルで更新
-                const item = mockData.find(d => d.id === currentEditingEventId);
+                const item = mockCalendarData.find(d => d.id === currentEditingEventId);
                 if (item) {
-                    item["企業名"] = title;
+                    item.title = title;
                     item.memo = memo;
-                    if (!item._meta) item._meta = {};
-                    item._meta.deadline = dateStr;
+                    item.date = dateStr;
                     found = true;
                 }
             }
         } else {
-            const item = mockData.find(d => d.id === currentEditingEventId);
+            const item = mockCalendarData.find(d => d.id === currentEditingEventId);
             if (item) {
-                item["企業名"] = title;
+                item.title = title;
                 item.memo = memo;
-                if (!item._meta) item._meta = {};
-                item._meta.deadline = dateStr;
-                localStorage.setItem('mockData', JSON.stringify(mockData));
+                item.date = dateStr;
+                localStorage.setItem('mockCalendarData', JSON.stringify(mockCalendarData));
                 found = true;
             }
         }
@@ -182,21 +184,19 @@ calendarModalSaveBtn.addEventListener('click', async () => {
     } else {
         // Add new
         const newItem = {
-            "企業名": title,
+            title: title,
+            date: dateStr,
             createdAt: new Date().toISOString(),
-            isHidden: false,
-            memo: memo,
-            _meta: { deadline: dateStr, isCustomEvent: true }
+            memo: memo
         };
         
         if (auth && auth.currentUser) {
-            const docRefNew = await addDoc(collection(db, "users", auth.currentUser.uid, "companies"), newItem);
-            // FirestoreのドキュメントIDを使用して一貫性を保つ
+            const docRefNew = await addDoc(collection(db, "users", auth.currentUser.uid, "calendar"), newItem);
             newItem.id = docRefNew.id;
         } else {
             newItem.id = Date.now() + Math.random().toString(36).substr(2, 9);
-            mockData.push(newItem);
-            localStorage.setItem('mockData', JSON.stringify(mockData));
+            mockCalendarData.push(newItem);
+            localStorage.setItem('mockCalendarData', JSON.stringify(mockCalendarData));
             loadData();
         }
     }
@@ -207,16 +207,15 @@ calendarModalDeleteBtn.addEventListener('click', async () => {
     if (!currentEditingEventId || !confirm("この予定を削除しますか？")) return;
     if (auth && auth.currentUser) {
         try {
-            await deleteDoc(doc(db, "users", auth.currentUser.uid, "companies", currentEditingEventId));
+            await deleteDoc(doc(db, "users", auth.currentUser.uid, "calendar", currentEditingEventId));
         } catch (e) {
             console.warn("Firestore deleteDoc failed for calendar event:", e.message);
-            // Firestoreに存在しない場合、ローカルから削除
-            mockData = mockData.filter(d => d.id !== currentEditingEventId);
+            mockCalendarData = mockCalendarData.filter(d => d.id !== currentEditingEventId);
             loadData();
         }
     } else {
-        mockData = mockData.filter(d => d.id !== currentEditingEventId);
-        localStorage.setItem('mockData', JSON.stringify(mockData));
+        mockCalendarData = mockCalendarData.filter(d => d.id !== currentEditingEventId);
+        localStorage.setItem('mockCalendarData', JSON.stringify(mockCalendarData));
         loadData();
     }
     calendarModal.style.display = 'none';
@@ -258,20 +257,35 @@ function getCalendarEvents() {
     const events = [];
     currentData.forEach(item => {
         if (item.isHidden && !showHiddenCheckbox.checked) return;
-        if (item._meta && item._meta.deadline) {
-            const title = item._meta.isCustomEvent ? item['企業名'] : ((item['企業名'] || item['会社名'] || '不明な企業') + ' 締切');
+        if (item._meta && item._meta.deadline && !item._meta.isCustomEvent) {
+            const title = (item['企業名'] || item['会社名'] || '不明な企業') + ' 締切';
             events.push({
                 id: item.id,
                 title: title,
                 start: item._meta.deadline,
                 allDay: true,
-                color: item._meta.isCustomEvent ? 'var(--secondary)' : 'var(--primary)',
+                color: 'var(--primary)',
                 extendedProps: {
                     memo: item.memo || ""
                 }
             });
         }
     });
+
+    // カレンダー専用データを追加
+    mockCalendarData.forEach(ev => {
+        events.push({
+            id: ev.id,
+            title: ev.title,
+            start: ev.date,
+            allDay: true,
+            color: 'var(--secondary)',
+            extendedProps: {
+                memo: ev.memo || ""
+            }
+        });
+    });
+
     return events;
 }
 
@@ -1495,6 +1509,7 @@ function processMetaData(dataList) {
 function loadData() {
     if (auth && auth.currentUser) {
         const colRef = collection(db, "users", auth.currentUser.uid, "companies");
+        if (unsubscribeSnapshot) unsubscribeSnapshot();
         unsubscribeSnapshot = onSnapshot(colRef, (snapshot) => {
             const data = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
             
@@ -1509,7 +1524,15 @@ function loadData() {
             renderQueryBuilder(); // フィールド一覧の更新
             applyFiltersAndRender();
         });
+
+        const calRef = collection(db, "users", auth.currentUser.uid, "calendar");
+        if (unsubscribeCalendarSnapshot) unsubscribeCalendarSnapshot();
+        unsubscribeCalendarSnapshot = onSnapshot(calRef, (snapshot) => {
+            mockCalendarData = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
+            updateCalendarEvents();
+        });
     } else {
+        mockCalendarData = localStorage.getItem('mockCalendarData') ? JSON.parse(localStorage.getItem('mockCalendarData')) : [];
         const data = [...mockData];
         processMetaData(data);
         currentData = data;
