@@ -442,19 +442,9 @@ td {
 }
 .fc-event {
     cursor: pointer;
-    background: var(--primary);
     border: none;
-    transition: filter 0.2s;
-}
-.fc-event:hover {
-    filter: brightness(0.85);
-}
-.fc-event .fc-event-title {
-    color: #fff;
-}
-.fc-event:hover .fc-event-title,
-.fc-event:hover .fc-event-time {
-    color: #fff;
+    border-left-width: 4px; /* Use left border for color coding */
+    border-left-style: solid;
 }
 
 /* Alarm Banner */

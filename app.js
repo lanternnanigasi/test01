@@ -320,7 +320,9 @@ function getCalendarEvents() {
                 title: title,
                 start: item._meta.deadline,
                 allDay: true,
-                color: 'var(--primary)',
+                backgroundColor: '#fff',
+                borderColor: 'var(--primary)',
+                textColor: '#000',
                 extendedProps: {
                     memo: item.memo || "",
                     type: "締切",
@@ -345,7 +347,9 @@ function getCalendarEvents() {
             title: `[${ev.type || '面接'}] ${ev.title}`,
             start: ev.date,
             allDay: true,
-            color: evColor,
+            backgroundColor: '#fff',
+            borderColor: evColor,
+            textColor: '#000',
             extendedProps: {
                 memo: ev.memo || "",
                 type: ev.type || "面接",
@@ -620,6 +624,28 @@ async function loadSettings() {
         const saved = localStorage.getItem('formatBuilderData');
         if (saved) formatBuilderData = JSON.parse(saved);
     }
+
+    // ユーザーの利便性のため、特記事項が含まれていなければ追加
+    if (!formatBuilderData.some(d => d.name === "特記事項")) {
+        formatBuilderData.push({
+            id: Date.now(), 
+            name: "特記事項", 
+            attributes: [{ id: Date.now()+1, val: "勤務形態や特定派遣であるなど、懸念点や特殊な条件がある場合のみ記載し、特にない場合は「なし」としてください", type: "rule" }]
+        });
+        // 保存する
+        const dataStr = JSON.stringify(formatBuilderData);
+        if (auth && auth.currentUser) {
+            try {
+                const docRef = doc(db, "users", auth.currentUser.uid, "settings", "formatBuilder");
+                updateDoc(docRef, { data: dataStr }).catch(() => {
+                    addDoc(collection(db, "users", auth.currentUser.uid, "settings"), { data: dataStr });
+                });
+            } catch(e){}
+        } else {
+            localStorage.setItem('formatBuilderData', dataStr);
+        }
+    }
+
     renderFormatBuilder();
 }
 
