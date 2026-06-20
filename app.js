@@ -59,7 +59,7 @@ const calendarSection = document.getElementById('calendar-section');
 const calendarEl = document.getElementById('calendar');
 
 // Version Check
-console.log("【就活メモ】 アプリバージョン: v1.3.0 (2026-06-20版)");
+console.log("【就活メモ】 アプリバージョン: v1.4.0 (2026-06-20版)");
 
 // State
 let isSignupMode = false;
@@ -388,9 +388,12 @@ function getCalendarEvents() {
         
         if (ev.isCompleted) {
             classNames.push('event-completed');
-            bgColor = 'rgba(255, 255, 255, 0.3)';
+            bgColor = 'rgba(0, 0, 0, 0.1)';
             borderColor = 'rgba(0, 0, 0, 0.2)';
             textColor = 'rgba(0, 0, 0, 0.4)';
+        } else {
+            bgColor = evColor;
+            textColor = '#fff';
         }
 
         events.push({
@@ -433,13 +436,16 @@ function updateUI() {
 }
 
 if (auth) {
-    onAuthStateChanged(auth, (user) => {
+    onAuthStateChanged(auth, async (user) => {
+        await loadSettings();
         updateUI();
     });
 } else {
     mockUser = localStorage.getItem('mockUser') ? JSON.parse(localStorage.getItem('mockUser')) : null;
     mockData = localStorage.getItem('mockData') ? JSON.parse(localStorage.getItem('mockData')) : [];
-    updateUI();
+    loadSettings().then(() => {
+        updateUI();
+    });
 }
 
 showSignupBtn.addEventListener('click', (e) => {
@@ -540,56 +546,82 @@ window.openFormatArchiveModal = function() {
     document.getElementById('format-archive-modal').style.display = 'flex';
 };
 
+// --- Format Saving logic ---
+const saveFormatToArchiveBtn = document.getElementById('save-format-to-archive-btn');
+if (saveFormatToArchiveBtn) {
+    saveFormatToArchiveBtn.addEventListener('click', () => {
+        const nameInput = document.getElementById('format-save-name');
+        let name = nameInput ? nameInput.value.trim() : "";
+        if (!name) name = `保存_${new Date().toLocaleString()}`;
+        
+        formatArchives.push({
+            id: Date.now(),
+            name: name,
+            type: "profile",
+            data: JSON.parse(JSON.stringify(formatBuilderData))
+        });
+        saveFormatArchivesAsync();
+        alert("現在のフォーマット設計図を保存しました！");
+        if (nameInput) nameInput.value = "";
+    });
+}
+
 function renderFormatArchives() {
     const list = document.getElementById('format-archive-list');
-    list.innerHTML = "";
+    if (!list) return;
+    list.innerHTML = '';
+    
     if (formatArchives.length === 0) {
         list.innerHTML = "<p style='color: var(--text-color); opacity: 0.7;'>保存されたアーカイブはありません。</p>";
         return;
     }
-    formatArchives.forEach((archiveItem, idx) => {
+
+    formatArchives.forEach((arch, index) => {
         const div = document.createElement('div');
-        div.style.padding = "12px";
-        div.style.border = "1px solid var(--border-color)";
-        div.style.borderRadius = "6px";
-        div.style.display = "flex";
-        div.style.justifyContent = "space-between";
-        div.style.alignItems = "center";
-        div.style.background = "var(--bg-card)";
+        div.className = 'input-group';
+        div.style.flexDirection = 'row';
+        div.style.alignItems = 'center';
+        div.style.justifyContent = 'space-between';
         
-        const info = document.createElement('div');
-        info.innerHTML = `<strong style="font-size:1.05rem;">${archiveItem.name}</strong><br/><span style="font-size:0.85rem; opacity:0.7;">${archiveItem.description || "説明なし"}</span>`;
+        const label = document.createElement('div');
+        if (typeof arch === "string") {
+            label.textContent = `[テキスト履歴] ${arch.substring(0, 30)}...`;
+        } else {
+            label.textContent = `[設計図] ${arch.name}`;
+        }
         
         const btnGroup = document.createElement('div');
-        btnGroup.style.display = "flex";
-        btnGroup.style.gap = "8px";
-        
-        const addBtn = document.createElement('button');
-        addBtn.className = "btn secondary";
-        addBtn.textContent = "追加";
-        addBtn.onclick = () => {
-            const newItem = JSON.parse(JSON.stringify(archiveItem));
-            newItem.id = Date.now();
-            formatBuilderData.push(newItem);
-            renderFormatBuilder();
-            saveFormatBuilderDataAsync();
+        btnGroup.style.display = 'flex';
+        btnGroup.style.gap = '8px';
+
+        const useBtn = document.createElement('button');
+        useBtn.className = 'btn secondary';
+        useBtn.textContent = '使う';
+        useBtn.onclick = () => {
+            if (typeof arch === "string") {
+                document.getElementById('format-output').value = arch;
+            } else if (arch.type === "profile") {
+                formatBuilderData = JSON.parse(JSON.stringify(arch.data));
+                saveFormatBuilderDataAsync();
+                renderFormatBuilder();
+            }
             document.getElementById('format-archive-modal').style.display = 'none';
         };
-        
+
         const delBtn = document.createElement('button');
-        delBtn.className = "icon-btn";
-        delBtn.textContent = "✕";
+        delBtn.className = 'btn text action-btn-danger';
+        delBtn.textContent = '削除';
         delBtn.onclick = () => {
-            if(confirm("このアーカイブを削除しますか？")){
-                formatArchives.splice(idx, 1);
+            if (confirm("このアーカイブを削除しますか？")) {
+                formatArchives.splice(index, 1);
                 saveFormatArchivesAsync();
                 renderFormatArchives();
             }
         };
-        
-        btnGroup.appendChild(addBtn);
+
+        btnGroup.appendChild(useBtn);
         btnGroup.appendChild(delBtn);
-        div.appendChild(info);
+        div.appendChild(label);
         div.appendChild(btnGroup);
         list.appendChild(div);
     });
@@ -1202,7 +1234,7 @@ clearDataBtn.addEventListener('click', async () => {
 });
 
 // --- Query Builder & Search Logic ---
-let queryRows = [
+var queryRows = [
     { id: Date.now(), bracketOpen: false, not: false, field: "all", operator: "contains", value: "", bracketClose: false, logic: "AND" }
 ];
 
@@ -1703,9 +1735,20 @@ function renderTable(data) {
 
     tableData.forEach(item => {
         const tr = document.createElement('tr');
-        if (item.isHidden) {
+        
+        // Hide row logically but keep in DOM if search-include-hidden is not checked
+        const showHidden = document.getElementById('search-include-hidden');
+        if (item.isHidden && (!showHidden || !showHidden.checked)) {
             tr.classList.add('is-hidden');
         }
+
+        const tdCheckbox = document.createElement('td');
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.className = 'merge-checkbox';
+        cb.value = item.id;
+        tdCheckbox.appendChild(cb);
+        tr.appendChild(tdCheckbox);
         
         headers.forEach(h => {
             const td = document.createElement('td');
@@ -1894,6 +1937,15 @@ function renderTable(data) {
 
         tableBody.appendChild(tr);
     });
+
+    const selectAllCb = document.getElementById('merge-select-all');
+    if (selectAllCb) {
+        selectAllCb.addEventListener('change', (e) => {
+            document.querySelectorAll('.merge-checkbox').forEach(cb => {
+                cb.checked = e.target.checked;
+            });
+        });
+    }
 }
 
 function processMetaData(dataList) {
@@ -2472,3 +2524,76 @@ if (saveAccountBtn) {
         setTimeout(() => saveAccountBtn.textContent = '保存', 2000);
     });
 }
+
+// --- Merge Logic ---
+function getSelectedItems() {
+    const checked = Array.from(document.querySelectorAll('.merge-checkbox:checked')).map(cb => cb.value);
+    return currentData.filter(d => checked.includes(d.id));
+}
+
+async function executeMerge(mode) {
+    const selected = getSelectedItems();
+    if (selected.length < 2) {
+        alert("合成するには2つ以上の行をチェックしてください！");
+        return;
+    }
+
+    if (!confirm(`${selected.length}件の行を合成しますか？ (操作は元に戻せません)`)) return;
+
+    // ソート順（新しい順に並べるなど）は現在の配列順を基準にする
+    const baseItem = JSON.parse(JSON.stringify(selected[0])); 
+    const otherItems = selected.slice(1);
+
+    otherItems.forEach(item => {
+        Object.keys(item).forEach(key => {
+            if (key === 'id' || key === 'createdAt' || key === '_meta' || key === 'isHidden') return;
+
+            if (!baseItem[key] || baseItem[key] === '-' || baseItem[key] === '未設定') {
+                baseItem[key] = item[key];
+            } else if (item[key] && item[key] !== '-' && item[key] !== '未設定') {
+                if (mode === 'keep-new') {
+                    // baseItemを「より新しく選択されたもの」とみなし、上書きしない（または上書きするロジック）
+                    // ここではリストの上に表示されている方を「ベース(新)」として扱う。
+                    // したがってすでに値があるならそのまま。
+                } else if (mode === 'keep-old') {
+                    // 下にある方(old)を優先するなら上書き
+                    baseItem[key] = item[key];
+                } else if (mode === 'concat') {
+                    // 値が異なる場合のみ結合
+                    if (baseItem[key] !== item[key]) {
+                        baseItem[key] = baseItem[key] + '\n' + item[key];
+                    }
+                }
+            }
+        });
+        
+        // メモの合成
+        if (item.memo) {
+            if (!baseItem.memo) baseItem.memo = item.memo;
+            else if (mode === 'concat' && baseItem.memo !== item.memo) baseItem.memo += '\n' + item.memo;
+            else if (mode === 'keep-old') baseItem.memo = item.memo;
+        }
+    });
+
+    // 1件目に合成結果を保存し、2件目以降を削除する
+    await updateItemData(baseItem.id, baseItem);
+    for (const item of otherItems) {
+        await deleteItemData(item.id); // 削除
+    }
+
+    // チェックを外す
+    document.querySelectorAll('.merge-checkbox').forEach(cb => cb.checked = false);
+    const selectAllCb = document.getElementById('merge-select-all');
+    if (selectAllCb) selectAllCb.checked = false;
+    
+    alert("合成が完了しました！");
+}
+
+const mergeKeepNewBtn = document.getElementById('merge-keep-new-btn');
+if (mergeKeepNewBtn) mergeKeepNewBtn.addEventListener('click', () => executeMerge('keep-new'));
+
+const mergeKeepOldBtn = document.getElementById('merge-keep-old-btn');
+if (mergeKeepOldBtn) mergeKeepOldBtn.addEventListener('click', () => executeMerge('keep-old'));
+
+const mergeConcatBtn = document.getElementById('merge-concat-btn');
+if (mergeConcatBtn) mergeConcatBtn.addEventListener('click', () => executeMerge('concat'));

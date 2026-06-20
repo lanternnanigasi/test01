@@ -57,6 +57,15 @@
                     <button class="icon-btn help-btn" onclick="document.getElementById('help-modal').style.display='flex'" style="background: rgba(0,166,81,0.1); color: var(--primary); font-weight: bold; border-radius: 50%; width: 24px; height: 24px; font-size: 0.9rem; padding: 0;">?</button>
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 12px;">
+                    <div style="background: rgba(0,0,0,0.05); padding: 12px; border-radius: 8px; border-left: 4px solid var(--primary); margin-bottom: 8px;">
+                        <p style="font-size: 0.9rem; margin-bottom: 4px; font-weight: bold; color: var(--text-color);">💡 このツールの使い方</p>
+                        <ol style="font-size: 0.85rem; margin-left: 20px; color: var(--text-color); opacity: 0.9;">
+                            <li>ここでAIに抽出させたい「項目」とその「ルール」を設定し、フォーマットを生成します。</li>
+                            <li>「生成されたフォーマット ＋ 企業名」をコピーし、お好きなAI（ChatGPTなど）に投げます。</li>
+                            <li>AIが出力した「表（Markdown）」を下のインポート枠に貼り付けます。</li>
+                            <li>自動的に下の「企業リスト」にデータが追加・管理されます。</li>
+                        </ol>
+                    </div>
                     <p style="font-size: 0.85rem; color: var(--text-color); opacity: 0.8;">抽出したい項目を追加し、それぞれの属性（タグ化やカスタム変数など）を設定してください。</p>
                     
                     <!-- Builder Container -->
@@ -69,7 +78,11 @@
                         <button id="open-archive-modal-btn" class="btn text" style="padding: 6px 12px; border: 1px dashed var(--border-color);" onclick="openFormatArchiveModal()">📚 アーカイブから追加</button>
                     </div>
                     
-                    <div style="margin-top: 12px; display: flex; justify-content: flex-end;">
+                    <div style="margin-top: 12px; display: flex; justify-content: space-between; align-items: center;">
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" id="format-save-name" placeholder="フォーマット名" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color); font-size: 0.9rem; background: rgba(255, 255, 255, 0.5); width: 150px;">
+                            <button id="save-format-to-archive-btn" class="btn secondary">設計図を保存</button>
+                        </div>
                         <button id="generate-format-btn" class="btn primary">フォーマット生成</button>
                     </div>
                 </div>
@@ -147,7 +160,19 @@
                     </div>
                     <div>
                         <button id="toggle-calendar-btn" class="btn text" style="margin-right: 8px;">📅 カレンダー表示</button>
-                        <button id="excel-mode-btn" class="btn primary" style="width: auto; background: var(--success); color: #fff;">エクセルモード(全画面)</button>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <label style="font-size: 0.85rem; display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                                <input type="checkbox" id="show-hidden-rows-toggle"> 非表示の行を表示
+                            </label>
+                            <button id="excel-mode-btn" class="btn primary" style="width: auto; background: var(--success); color: #fff;">エクセルモード(全画面)</button>
+                        </div>
+                    </div>
+                    <!-- Merge Controls -->
+                    <div style="display: flex; gap: 8px; margin-bottom: 12px; align-items: center; background: rgba(0,0,0,0.03); padding: 8px; border-radius: 8px;">
+                        <span style="font-size: 0.85rem; font-weight: bold; color: var(--text-color);">🔗 チェックした行を合成:</span>
+                        <button id="merge-keep-new-btn" class="btn text" style="font-size: 0.85rem; border: 1px solid var(--border-color);">新しい方に合わせる</button>
+                        <button id="merge-keep-old-btn" class="btn text" style="font-size: 0.85rem; border: 1px solid var(--border-color);">古い方に合わせる</button>
+                        <button id="merge-concat-btn" class="btn text" style="font-size: 0.85rem; border: 1px solid var(--border-color);">内容を足し合わせる(改行)</button>
                     </div>
                 </div>
                 <div class="table-container">
@@ -175,6 +200,12 @@
                 <p style="font-size: 0.9rem; color: var(--text-color); opacity: 0.8; margin-bottom: 24px;">
                     共通の志望動機や自己PR、経験・スキルなどをメモしておけます。このデータは後でAIに読み込ませて、企業に合わせた自己PRの自動生成などに活用する予定です。
                 </p>
+                <!-- 就活の軸 -->
+                <div style="margin-bottom: 32px;">
+                    <h3 style="font-size: 1.1rem; margin-bottom: 8px; color: var(--primary);">🧭 就活の軸 (絶対に譲れないこと、やりたくないこと等)</h3>
+                    <textarea id="account-core-values" rows="6" placeholder="・完全週休二日制&#10;・残業は月20時間以内&#10;・転勤なし&#10;など..." style="width: 100%; border-radius: 8px; border: 1px solid var(--border-color); padding: 12px; background: rgba(255, 255, 255, 0.5); font-size: 0.95rem; line-height: 1.5; resize: vertical;"></textarea>
+                </div>
+                <hr style="border: none; border-top: 1px dashed var(--border-color); margin-bottom: 24px;">
                 <div id="account-fields-container" style="display: flex; flex-direction: column; gap: 24px;">
                     <!-- JS generated fields -->
                 </div>
