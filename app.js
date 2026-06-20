@@ -59,7 +59,7 @@ const calendarSection = document.getElementById('calendar-section');
 const calendarEl = document.getElementById('calendar');
 
 // Version Check
-console.log("【就活メモ】 アプリバージョン: v1.2.0 (2026-06-20版)");
+console.log("【就活メモ】 アプリバージョン: v1.2.1 (2026-06-20版)");
 
 // State
 let isSignupMode = false;
@@ -2211,37 +2211,43 @@ window.createNewNote = function() {
     showNoteEditor(newNote);
 };
 
-document.getElementById('note-save-btn').addEventListener('click', () => {
-    if (!currentNoteId) return;
-    const item = mockData.find(d => d.id === currentNoteCompanyId);
-    if (!item || !item._meta || !item._meta.notes) return;
-    
-    const titleInput = document.getElementById('note-edit-title');
-    const contentInput = document.getElementById('note-edit-content');
-    
-    const noteIdx = item._meta.notes.findIndex(n => n.id === currentNoteId);
-    if (noteIdx !== -1) {
-        item._meta.notes[noteIdx].title = titleInput.value.trim();
-        item._meta.notes[noteIdx].content = contentInput.value;
-        saveCurrentNotes(item._meta.notes);
-        renderNotesSidebar(); // reflect title changes
-        alert("ノートを保存しました！");
-    }
-});
-
-document.getElementById('note-delete-btn').addEventListener('click', () => {
-    if (!currentNoteId) return;
-    if (confirm("このノートを本当に削除しますか？")) {
+const noteSaveBtn = document.getElementById('note-save-btn');
+if (noteSaveBtn) {
+    noteSaveBtn.addEventListener('click', () => {
+        if (!currentNoteId) return;
         const item = mockData.find(d => d.id === currentNoteCompanyId);
         if (!item || !item._meta || !item._meta.notes) return;
         
-        item._meta.notes = item._meta.notes.filter(n => n.id !== currentNoteId);
-        saveCurrentNotes(item._meta.notes);
-        currentNoteId = null;
-        renderNotesSidebar();
-        showNoteEditor(null);
-    }
-});
+        const titleInput = document.getElementById('note-edit-title');
+        const contentInput = document.getElementById('note-edit-content');
+        
+        const noteIdx = item._meta.notes.findIndex(n => n.id === currentNoteId);
+        if (noteIdx !== -1) {
+            item._meta.notes[noteIdx].title = titleInput.value.trim();
+            item._meta.notes[noteIdx].content = contentInput.value;
+            saveCurrentNotes(item._meta.notes);
+            renderNotesSidebar(); // reflect title changes
+            alert("ノートを保存しました！");
+        }
+    });
+}
+
+const noteDeleteBtn = document.getElementById('note-delete-btn');
+if (noteDeleteBtn) {
+    noteDeleteBtn.addEventListener('click', () => {
+        if (!currentNoteId) return;
+        if (confirm("このノートを本当に削除しますか？")) {
+            const item = mockData.find(d => d.id === currentNoteCompanyId);
+            if (!item || !item._meta || !item._meta.notes) return;
+            
+            item._meta.notes = item._meta.notes.filter(n => n.id !== currentNoteId);
+            saveCurrentNotes(item._meta.notes);
+            currentNoteId = null;
+            renderNotesSidebar();
+            showNoteEditor(null);
+        }
+    });
+}
 
 function saveCurrentNotes(newNotesArray) {
     const item = mockData.find(d => d.id === currentNoteCompanyId);
