@@ -59,7 +59,7 @@ const calendarSection = document.getElementById('calendar-section');
 const calendarEl = document.getElementById('calendar');
 
 // Version Check
-console.log("【就活メモ】 アプリバージョン: v1.2.2 (2026-06-20版)");
+console.log("【就活メモ】 アプリバージョン: v1.2.3 (2026-06-20版)");
 
 // State
 let isSignupMode = false;
@@ -600,6 +600,21 @@ function renderFormatBuilder() {
             renderFormatBuilder();
         });
 
+        const saveArchiveBtn = document.createElement('button');
+        saveArchiveBtn.textContent = '💾';
+        saveArchiveBtn.className = 'icon-btn';
+        saveArchiveBtn.title = 'アーカイブに保存';
+        saveArchiveBtn.addEventListener('click', () => {
+            formatArchives.push({
+                id: Date.now(),
+                name: item.name,
+                description: item.description,
+                attributes: JSON.parse(JSON.stringify(item.attributes))
+            });
+            saveFormatArchivesAsync();
+            alert(`「${item.name}」をアーカイブに保存しました`);
+        });
+
         const delBtn = document.createElement('button');
         delBtn.textContent = '✕';
         delBtn.className = 'icon-btn';
@@ -610,6 +625,7 @@ function renderFormatBuilder() {
 
         topRow.appendChild(nameInput);
         topRow.appendChild(addAttrBtn);
+        topRow.appendChild(saveArchiveBtn);
         topRow.appendChild(delBtn);
         row.appendChild(topRow);
 
@@ -1827,7 +1843,7 @@ function renderTable(data) {
 
 function processMetaData(dataList) {
     dataList.forEach(item => {
-        item._meta = {}; 
+        if (!item._meta) item._meta = {}; 
         
         let allText = "";
         Object.values(item).forEach(text => {
