@@ -516,9 +516,7 @@ function saveFormatBuilderDataAsync() {
         if (auth && auth.currentUser) {
             try {
                 const docRef = doc(db, "users", auth.currentUser.uid, "settings", "formatBuilder");
-                await updateDoc(docRef, { data: dataStr }).catch(async () => {
-                    await addDoc(collection(db, "users", auth.currentUser.uid, "settings"), { data: dataStr });
-                });
+                await setDoc(docRef, { data: dataStr }, { merge: true });
             } catch (e) {}
         }
     }, 1000);
@@ -1010,9 +1008,7 @@ generateFormatBtn.addEventListener('click', async () => {
     if (auth && auth.currentUser) {
         try {
             const docRef = doc(db, "users", auth.currentUser.uid, "settings", "formatBuilder");
-            await updateDoc(docRef, { data: dataStr }).catch(async () => {
-                await addDoc(collection(db, "users", auth.currentUser.uid, "settings"), { data: dataStr });
-            });
+            await setDoc(docRef, { data: dataStr }, { merge: true });
         } catch (e) {}
     }
     localStorage.setItem('formatBuilderData', dataStr);
