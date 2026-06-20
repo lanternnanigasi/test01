@@ -59,7 +59,7 @@ const calendarSection = document.getElementById('calendar-section');
 const calendarEl = document.getElementById('calendar');
 
 // Version Check
-console.log("【就活メモ】 アプリバージョン: v1.1.0 (2026-06-20版)");
+console.log("【就活メモ】 アプリバージョン: v1.2.0 (2026-06-20版)");
 
 // State
 let isSignupMode = false;
@@ -445,6 +445,101 @@ logoutBtn.addEventListener('click', () => {
 });
 
 let formatBuilderData = [];
+let formatArchives = [];
+
+let formatBuilderSaveTimeout;
+function saveFormatBuilderDataAsync() {
+    clearTimeout(formatBuilderSaveTimeout);
+    formatBuilderSaveTimeout = setTimeout(async () => {
+        const dataStr = JSON.stringify(formatBuilderData);
+        localStorage.setItem('formatBuilderData', dataStr);
+        if (auth && auth.currentUser) {
+            try {
+                const docRef = doc(db, "users", auth.currentUser.uid, "settings", "formatBuilder");
+                await updateDoc(docRef, { data: dataStr }).catch(async () => {
+                    await addDoc(collection(db, "users", auth.currentUser.uid, "settings"), { data: dataStr });
+                });
+            } catch (e) {}
+        }
+    }, 1000);
+}
+
+let formatArchivesSaveTimeout;
+function saveFormatArchivesAsync() {
+    clearTimeout(formatArchivesSaveTimeout);
+    formatArchivesSaveTimeout = setTimeout(async () => {
+        const dataStr = JSON.stringify(formatArchives);
+        localStorage.setItem('formatArchives', dataStr);
+        if (auth && auth.currentUser) {
+            try {
+                const docRef = doc(db, "users", auth.currentUser.uid, "settings", "formatArchives");
+                await updateDoc(docRef, { data: dataStr }).catch(async () => {
+                    await addDoc(collection(db, "users", auth.currentUser.uid, "settings"), { data: dataStr });
+                });
+            } catch (e) {}
+        }
+    }, 1000);
+}
+
+window.openFormatArchiveModal = function() {
+    renderFormatArchives();
+    document.getElementById('format-archive-modal').style.display = 'flex';
+};
+
+function renderFormatArchives() {
+    const list = document.getElementById('format-archive-list');
+    list.innerHTML = "";
+    if (formatArchives.length === 0) {
+        list.innerHTML = "<p style='color: var(--text-color); opacity: 0.7;'>保存されたアーカイブはありません。</p>";
+        return;
+    }
+    formatArchives.forEach((archiveItem, idx) => {
+        const div = document.createElement('div');
+        div.style.padding = "12px";
+        div.style.border = "1px solid var(--border-color)";
+        div.style.borderRadius = "6px";
+        div.style.display = "flex";
+        div.style.justifyContent = "space-between";
+        div.style.alignItems = "center";
+        div.style.background = "var(--bg-card)";
+        
+        const info = document.createElement('div');
+        info.innerHTML = `<strong style="font-size:1.05rem;">${archiveItem.name}</strong><br/><span style="font-size:0.85rem; opacity:0.7;">${archiveItem.description || "説明なし"}</span>`;
+        
+        const btnGroup = document.createElement('div');
+        btnGroup.style.display = "flex";
+        btnGroup.style.gap = "8px";
+        
+        const addBtn = document.createElement('button');
+        addBtn.className = "btn secondary";
+        addBtn.textContent = "追加";
+        addBtn.onclick = () => {
+            const newItem = JSON.parse(JSON.stringify(archiveItem));
+            newItem.id = Date.now();
+            formatBuilderData.push(newItem);
+            renderFormatBuilder();
+            saveFormatBuilderDataAsync();
+            document.getElementById('format-archive-modal').style.display = 'none';
+        };
+        
+        const delBtn = document.createElement('button');
+        delBtn.className = "icon-btn";
+        delBtn.textContent = "✕";
+        delBtn.onclick = () => {
+            if(confirm("このアーカイブを削除しますか？")){
+                formatArchives.splice(idx, 1);
+                saveFormatArchivesAsync();
+                renderFormatArchives();
+            }
+        };
+        
+        btnGroup.appendChild(addBtn);
+        btnGroup.appendChild(delBtn);
+        div.appendChild(info);
+        div.appendChild(btnGroup);
+        list.appendChild(div);
+    });
+}
 
 const defaultFormatBuilderData = [
     { id: 1, name: "業界", attributes: [{id: 11, val: "業界名には「#IT」などのように", type: "hashtag"}] },
@@ -550,7 +645,8 @@ function renderFormatBuilder() {
                 const types = [
                     {val: "hashtag", label: "# ハッシュタグ化"},
                     {val: "color", label: "🎨 色付け条件"},
-                    {val: "variable", label: "📊 変数(数値・日付等)"}
+                    {val: "variable", label: "📊 変数(数値・日付等)"},
+                    {val: "rule", label: "📝 ルール"}
                 ];
                 types.forEach(t => {
                     const opt = document.createElement('option');
@@ -574,7 +670,10 @@ function renderFormatBuilder() {
                         condInput.style.width = "120px";
                         condInput.style.fontSize = "0.85rem";
                         condInput.style.padding = "4px";
-                        condInput.addEventListener('input', (e) => attr.condition = e.target.value);
+                        condInput.addEventListener('input', (e) => {
+                            attr.condition = e.target.value;
+                            saveFormatBuilderDataAsync();
+                        });
                         
                         const colSelect = document.createElement('select');
                         colSelect.style.fontSize = "0.85rem";
@@ -586,7 +685,10 @@ function renderFormatBuilder() {
                             if (attr.color === c.val) opt.selected = true;
                             colSelect.appendChild(opt);
                         });
-                        colSelect.addEventListener('change', (e) => attr.color = e.target.value);
+                        colSelect.addEventListener('change', (e) => {
+                            attr.color = e.target.value;
+                            saveFormatBuilderDataAsync();
+                        });
                         
                         extraDiv.appendChild(condInput);
                         extraDiv.appendChild(colSelect);
@@ -598,7 +700,10 @@ function renderFormatBuilder() {
                         tagInput.style.width = "200px";
                         tagInput.style.fontSize = "0.85rem";
                         tagInput.style.padding = "4px";
-                        tagInput.addEventListener('input', (e) => attr.val = e.target.value);
+                        tagInput.addEventListener('input', (e) => {
+                            attr.val = e.target.value;
+                            saveFormatBuilderDataAsync();
+                        });
                         extraDiv.appendChild(tagInput);
                     } else if (attr.type === "variable") {
                         const varInput = document.createElement('input');
@@ -608,7 +713,10 @@ function renderFormatBuilder() {
                         varInput.style.width = "200px";
                         varInput.style.fontSize = "0.85rem";
                         varInput.style.padding = "4px";
-                        varInput.addEventListener('input', (e) => attr.val = e.target.value);
+                        varInput.addEventListener('input', (e) => {
+                            attr.val = e.target.value;
+                            saveFormatBuilderDataAsync();
+                        });
                         extraDiv.appendChild(varInput);
                     } else if (attr.type === "rule") {
                         const ruleInput = document.createElement('input');
@@ -618,7 +726,10 @@ function renderFormatBuilder() {
                         ruleInput.style.width = "250px";
                         ruleInput.style.fontSize = "0.85rem";
                         ruleInput.style.padding = "4px";
-                        ruleInput.addEventListener('input', (e) => attr.val = e.target.value);
+                        ruleInput.addEventListener('input', (e) => {
+                            attr.val = e.target.value;
+                            saveFormatBuilderDataAsync();
+                        });
                         extraDiv.appendChild(ruleInput);
                     }
                 };
@@ -627,6 +738,7 @@ function renderFormatBuilder() {
                 typeSelect.addEventListener('change', (e) => {
                     attr.type = e.target.value;
                     renderAttrExtra();
+                    saveFormatBuilderDataAsync();
                 });
 
                 const removeAttrBtn = document.createElement('button');
@@ -636,6 +748,7 @@ function renderFormatBuilder() {
                 removeAttrBtn.addEventListener('click', () => {
                     item.attributes.splice(attrIdx, 1);
                     renderFormatBuilder();
+                    saveFormatBuilderDataAsync();
                 });
 
                 attrRow.appendChild(typeSelect);
@@ -666,6 +779,9 @@ async function loadSettings() {
                 if (d.id === "calendarEventTypes" && d.data().data) {
                     calendarEventTypes = JSON.parse(d.data().data);
                 }
+                if (d.id === "formatArchives" && d.data().data) {
+                    formatArchives = JSON.parse(d.data().data);
+                }
             });
         } catch (e) {
             console.error(e);
@@ -676,6 +792,9 @@ async function loadSettings() {
         
         const savedTypes = localStorage.getItem('calendarEventTypes');
         if (savedTypes) calendarEventTypes = JSON.parse(savedTypes);
+
+        const savedArchives = localStorage.getItem('formatArchives');
+        if (savedArchives) formatArchives = JSON.parse(savedArchives);
     }
 
     if (formatBuilderData.length === 0) {
@@ -795,12 +914,9 @@ generateFormatBtn.addEventListener('click', async () => {
         } catch (e) {}
     }
     localStorage.setItem('formatBuilderData', dataStr);
-
-    const headers = ["企業名", ...validItems.map(d => d.name)].join(" / ");
-    const dividers = ["---", ...validItems.map(() => "---")].join(" / ");
     
     // 冒頭
-    let prompt = `以下の企業情報を調査・整理し、指定のテキストフォーマットで出力してください。見やすい表形式などのリッチテキスト装飾は【厳禁】です。\n\n■ 抽出項目とルール\n- 企業名\n`;
+    let prompt = `以下の企業情報を調査・整理し、指定のフォーマットで出力してください。見やすい表形式などのリッチテキスト装飾は【厳禁】です。\n\n■ 抽出項目とルール\n- 企業名\n`;
 
     let varCount = 1;
     validItems.forEach(item => {
@@ -829,11 +945,11 @@ generateFormatBtn.addEventListener('click', async () => {
     });
 
     // 中間
-    prompt += `\n人間が見やすい表などの出力ではなく、下に示すテキストフォーマットでのみ出力せよ。\n\n`;
+    prompt += `\n人間が見やすい表などの出力ではなく、純粋なデータ行のみを出力せよ。\n\n`;
     prompt += `出力フォーマット：\n/ (対象企業名1) / (調査内容) / ... /\n/ (対象企業名2) / (調査内容) / ... /\n\n`;
     
     // 末尾
-    prompt += `必ず「/」で情報が区切られたテキスト記法で、文字によってのみ出力すること。Markdownの表（ヘッダー行や --- などの区切り線）として出力してはならない。`;
+    prompt += `必ず「/」で情報が区切られたデータ行のみを出力すること。Markdownの表形式(ヘッダー行や---の区切り線)は絶対に生成しないでください。`;
     
     formatOutput.value = prompt;
 });
@@ -864,7 +980,7 @@ function parseMarkdownTable(markdown) {
     
     if (separatorIndex <= 0) {
         // ヘッダーや区切り行が見つからない場合のフォールバック（AIが//区切りのデータのみ出力した場合）
-        if (markdown.includes('//') || markdown.split('/').length > 5) {
+        if (markdown.includes('/')) {
             const validItems = formatBuilderData.filter(d => d.name.trim() !== "");
             const expectedHeaders = ["企業名", ...validItems.map(d => d.name)];
             
@@ -880,7 +996,7 @@ function parseMarkdownTable(markdown) {
                     for (let i = 0; i < expectedHeaders.length && i < cells.length; i++) {
                         rowData[expectedHeaders[i]] = cells[i];
                     }
-                    if (rowData["企業名"]) results.push(rowData);
+                    if (rowData["企業名"] && rowData["企業名"] !== "企業名" && !rowData["企業名"].includes("対象企業名") && !rowData["企業名"].includes("---")) results.push(rowData);
                 }
             }
             if (results.length > 0) return results;
@@ -1535,22 +1651,43 @@ function renderTable(data) {
                 const actionContainer = document.createElement('div');
                 actionContainer.className = 'action-buttons';
 
-                // Links
-                const owLink = document.createElement('a');
-                owLink.href = `https://google.com/search?q=${encodeURIComponent(companyName + " OpenWork")}`;
-                owLink.target = "_blank";
-                owLink.className = "external-link";
-                owLink.textContent = "OpenWork";
-                
-                const recLink = document.createElement('a');
-                recLink.href = `https://google.com/search?q=${encodeURIComponent(companyName + " 採用ページ")}`;
-                recLink.target = "_blank";
-                recLink.className = "external-link";
-                recLink.textContent = "採用ページ";
-
                 const linkDiv = document.createElement('div');
-                linkDiv.appendChild(owLink);
-                linkDiv.appendChild(recLink);
+                linkDiv.style.display = 'flex';
+                linkDiv.style.flexWrap = 'wrap';
+                linkDiv.style.gap = '4px';
+                
+                const metaLinks = (item._meta && item._meta.links) ? item._meta.links : [
+                    {title: "OpenWork", url: `https://google.com/search?q=${encodeURIComponent(companyName + " OpenWork")}`},
+                    {title: "採用ページ", url: `https://google.com/search?q=${encodeURIComponent(companyName + " 採用ページ")}`}
+                ];
+
+                metaLinks.forEach(l => {
+                    const lBtn = document.createElement('a');
+                    lBtn.href = l.url;
+                    lBtn.target = "_blank";
+                    lBtn.className = "external-link";
+                    lBtn.textContent = l.title;
+                    linkDiv.appendChild(lBtn);
+                });
+
+                const linkManageBtn = document.createElement('button');
+                linkManageBtn.className = "action-btn-small";
+                linkManageBtn.textContent = "🔗 リンク";
+                linkManageBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    openLinksModal(item.id);
+                };
+                linkDiv.appendChild(linkManageBtn);
+
+                const noteManageBtn = document.createElement('button');
+                noteManageBtn.className = "action-btn-small";
+                noteManageBtn.textContent = "📝 ノート";
+                noteManageBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    openNotesModal(item.id);
+                };
+                linkDiv.appendChild(noteManageBtn);
+
                 actionContainer.appendChild(linkDiv);
 
                 // Hidden Toggle
@@ -1886,3 +2023,230 @@ editModalSaveBtn.addEventListener('click', () => {
     currentEditItemId = null;
     currentEditField = null;
 });
+
+// --- Links Management ---
+let currentLinkCompanyId = null;
+
+window.openLinksModal = function(companyId) {
+    currentLinkCompanyId = companyId;
+    const item = mockData.find(d => d.id === companyId);
+    if (!item) return;
+    const companyName = item['企業名'] || item['会社名'] || '企業';
+    document.getElementById('links-modal-title').textContent = `${companyName} のリンク管理`;
+    renderLinksList();
+    document.getElementById('links-modal').style.display = 'flex';
+};
+
+function renderLinksList() {
+    const item = mockData.find(d => d.id === currentLinkCompanyId);
+    const list = document.getElementById('links-list');
+    list.innerHTML = "";
+    if (!item) return;
+    
+    let links = (item._meta && item._meta.links) ? item._meta.links : [];
+    if (links.length === 0) {
+        list.innerHTML = "<p style='color:var(--text-color); opacity:0.6;'>登録されているリンクはありません。</p>";
+        return;
+    }
+    
+    links.forEach((l, idx) => {
+        const div = document.createElement('div');
+        div.style.display = 'flex';
+        div.style.gap = '8px';
+        div.style.alignItems = 'center';
+        div.style.padding = '8px';
+        div.style.border = '1px solid var(--border-color)';
+        div.style.borderRadius = '4px';
+        
+        const titleInput = document.createElement('input');
+        titleInput.className = 'glass-input';
+        titleInput.value = l.title;
+        titleInput.style.flex = "1";
+        titleInput.addEventListener('change', (e) => { l.title = e.target.value; saveCurrentLinks(links); });
+        
+        const urlInput = document.createElement('input');
+        urlInput.className = 'glass-input';
+        urlInput.value = l.url;
+        urlInput.style.flex = "2";
+        urlInput.addEventListener('change', (e) => { l.url = e.target.value; saveCurrentLinks(links); });
+        
+        const delBtn = document.createElement('button');
+        delBtn.className = 'icon-btn';
+        delBtn.textContent = '✕';
+        delBtn.onclick = () => {
+            links.splice(idx, 1);
+            saveCurrentLinks(links);
+            renderLinksList();
+        };
+        
+        div.appendChild(titleInput);
+        div.appendChild(urlInput);
+        div.appendChild(delBtn);
+        list.appendChild(div);
+    });
+}
+
+window.addNewLink = function() {
+    const titleInput = document.getElementById('new-link-title');
+    const urlInput = document.getElementById('new-link-url');
+    if (!titleInput.value.trim() || !urlInput.value.trim()) {
+        alert("タイトルとURLを入力してください。");
+        return;
+    }
+    
+    const item = mockData.find(d => d.id === currentLinkCompanyId);
+    if (!item) return;
+    if (!item._meta) item._meta = {};
+    if (!item._meta.links) {
+        const companyName = item['企業名'] || item['会社名'] || '';
+        item._meta.links = [
+            {title: "OpenWork", url: `https://google.com/search?q=${encodeURIComponent(companyName + " OpenWork")}`},
+            {title: "採用ページ", url: `https://google.com/search?q=${encodeURIComponent(companyName + " 採用ページ")}`}
+        ];
+    }
+    
+    item._meta.links.push({ title: titleInput.value.trim(), url: urlInput.value.trim() });
+    saveCurrentLinks(item._meta.links);
+    
+    titleInput.value = "";
+    urlInput.value = "";
+    renderLinksList();
+};
+
+function saveCurrentLinks(newLinksArray) {
+    const item = mockData.find(d => d.id === currentLinkCompanyId);
+    if (!item) return;
+    if (!item._meta) item._meta = {};
+    item._meta.links = newLinksArray;
+    updateItemData(currentLinkCompanyId, { _meta: item._meta });
+}
+
+// --- Notes Management ---
+let currentNoteCompanyId = null;
+let currentNoteId = null;
+
+window.openNotesModal = function(companyId) {
+    currentNoteCompanyId = companyId;
+    const item = mockData.find(d => d.id === companyId);
+    if (!item) return;
+    const companyName = item['企業名'] || item['会社名'] || '企業';
+    document.getElementById('notes-modal-title').textContent = `${companyName} のノート`;
+    currentNoteId = null;
+    renderNotesSidebar();
+    showNoteEditor(null);
+    document.getElementById('notes-modal').style.display = 'flex';
+};
+
+function renderNotesSidebar() {
+    const item = mockData.find(d => d.id === currentNoteCompanyId);
+    const list = document.getElementById('notes-sidebar-list');
+    list.innerHTML = "";
+    if (!item) return;
+    
+    const notes = (item._meta && item._meta.notes) ? item._meta.notes : [];
+    
+    if (notes.length === 0) {
+        list.innerHTML = "<p style='color:var(--text-color); opacity:0.6; font-size:0.85rem;'>ノートがありません。</p>";
+        return;
+    }
+    
+    notes.forEach((note) => {
+        const btn = document.createElement('button');
+        btn.className = 'btn text';
+        btn.style.textAlign = 'left';
+        btn.style.width = '100%';
+        btn.style.justifyContent = 'flex-start';
+        btn.style.whiteSpace = 'nowrap';
+        btn.style.overflow = 'hidden';
+        btn.style.textOverflow = 'ellipsis';
+        btn.textContent = note.title || "無題のノート";
+        if (currentNoteId === note.id) {
+            btn.style.background = 'var(--primary)';
+            btn.style.color = '#fff';
+        }
+        btn.onclick = () => {
+            currentNoteId = note.id;
+            renderNotesSidebar();
+            showNoteEditor(note);
+        };
+        list.appendChild(btn);
+    });
+}
+
+function showNoteEditor(note) {
+    const container = document.getElementById('note-editor-container');
+    const emptyState = document.getElementById('note-empty-state');
+    const titleInput = document.getElementById('note-edit-title');
+    const contentInput = document.getElementById('note-edit-content');
+    
+    if (!note) {
+        container.style.display = 'none';
+        emptyState.style.display = 'flex';
+        return;
+    }
+    
+    container.style.display = 'flex';
+    emptyState.style.display = 'none';
+    
+    titleInput.value = note.title || "";
+    contentInput.value = note.content || "";
+}
+
+window.createNewNote = function() {
+    const item = mockData.find(d => d.id === currentNoteCompanyId);
+    if (!item) return;
+    if (!item._meta) item._meta = {};
+    if (!item._meta.notes) item._meta.notes = [];
+    
+    const newNote = {
+        id: Date.now(),
+        title: "新規ノート",
+        content: ""
+    };
+    
+    item._meta.notes.push(newNote);
+    currentNoteId = newNote.id;
+    saveCurrentNotes(item._meta.notes);
+    renderNotesSidebar();
+    showNoteEditor(newNote);
+};
+
+document.getElementById('note-save-btn').addEventListener('click', () => {
+    if (!currentNoteId) return;
+    const item = mockData.find(d => d.id === currentNoteCompanyId);
+    if (!item || !item._meta || !item._meta.notes) return;
+    
+    const titleInput = document.getElementById('note-edit-title');
+    const contentInput = document.getElementById('note-edit-content');
+    
+    const noteIdx = item._meta.notes.findIndex(n => n.id === currentNoteId);
+    if (noteIdx !== -1) {
+        item._meta.notes[noteIdx].title = titleInput.value.trim();
+        item._meta.notes[noteIdx].content = contentInput.value;
+        saveCurrentNotes(item._meta.notes);
+        renderNotesSidebar(); // reflect title changes
+        alert("ノートを保存しました！");
+    }
+});
+
+document.getElementById('note-delete-btn').addEventListener('click', () => {
+    if (!currentNoteId) return;
+    if (confirm("このノートを本当に削除しますか？")) {
+        const item = mockData.find(d => d.id === currentNoteCompanyId);
+        if (!item || !item._meta || !item._meta.notes) return;
+        
+        item._meta.notes = item._meta.notes.filter(n => n.id !== currentNoteId);
+        saveCurrentNotes(item._meta.notes);
+        currentNoteId = null;
+        renderNotesSidebar();
+        showNoteEditor(null);
+    }
+});
+
+function saveCurrentNotes(newNotesArray) {
+    const item = mockData.find(d => d.id === currentNoteCompanyId);
+    if (!item) return;
+    if (!item._meta) item._meta = {};
+    item._meta.notes = newNotesArray;
+    updateItemData(currentNoteCompanyId, { _meta: item._meta });
+}

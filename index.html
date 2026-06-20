@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>就活メモ</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📝</text></svg>">
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <!-- FullCalendar CDN -->
@@ -22,7 +23,7 @@
                 </div>
                 <div class="input-group">
                     <label>パスワード</label>
-                    <input type="password" id="password" required>
+                    <input type="password" id="password" autocomplete="current-password" required>
                 </div>
                 <button type="submit" class="btn primary">ログイン</button>
             </form>
@@ -76,9 +77,10 @@
                 <h2>AIテキストインポート</h2>
                 <p>AIが出力したMarkdownテーブルを貼り付けてください。メタデータとタグが自動で処理されます。</p>
                 <textarea id="import-text" placeholder="| 項目 | 調査結果 |&#10;| --- | --- |&#10;| 企業名 | トヨタ自動車九州 |..."></textarea>
-                <div style="display: flex; align-items: center;">
-                    <button id="import-btn" class="btn primary" style="width: auto;">データ登録</button>
-                    <button id="clear-data-btn" class="btn text" style="color: var(--danger); margin-left: 16px;">全データをクリア (リセット)</button>
+                <div style="display: flex; gap: 12px;">
+                    <button id="add-format-item-btn" class="btn secondary" style="width: auto;">+ 抽出項目を追加</button>
+                    <button id="open-archive-modal-btn" class="btn text" style="width: auto;" onclick="openFormatArchiveModal()">📚 アーカイブから追加</button>
+                </div>    <button id="clear-data-btn" class="btn text" style="color: var(--danger); margin-left: 16px;">全データをクリア (リセット)</button>
                 </div>
                 <div id="import-status"></div>
             </section>
@@ -232,6 +234,75 @@
                     <input type="text" id="new-event-type-name" class="glass-input" placeholder="新しい分類名" style="flex: 1;">
                     <input type="color" id="new-event-type-color" value="#3b82f6" style="width: 40px; height: 38px; cursor: pointer; padding: 0; border: 1px solid var(--border-color); border-radius: 4px;">
                     <button class="btn secondary" onclick="addNewEventType()">追加</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Format Archive Modal -->
+    <div id="format-archive-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content glass-card" style="width: 600px; max-width: 95%;">
+            <div class="modal-header">
+                <h3>📚 フォーマットアーカイブ</h3>
+                <button class="icon-btn" onclick="document.getElementById('format-archive-modal').style.display='none'">✕</button>
+            </div>
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 12px; max-height: 70vh; overflow-y: auto;">
+                <p style="font-size: 0.85rem; color: var(--text-color); opacity: 0.8;">過去に保存したフォーマット要素をクリックして追加します。</p>
+                <div id="format-archive-list" style="display: flex; flex-direction: column; gap: 8px;">
+                    <!-- JS generated list -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Links Management Modal -->
+    <div id="links-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content glass-card" style="width: 500px; max-width: 95%;">
+            <div class="modal-header">
+                <h3 id="links-modal-title">リンク管理</h3>
+                <button class="icon-btn" onclick="document.getElementById('links-modal').style.display='none'">✕</button>
+            </div>
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 12px;">
+                <div id="links-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow-y: auto;">
+                    <!-- JS generated list -->
+                </div>
+                <div style="display: flex; gap: 8px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-color); align-items: center;">
+                    <input type="text" id="new-link-title" class="glass-input" placeholder="タイトル (例: マイページ)" style="flex: 1;">
+                    <input type="text" id="new-link-url" class="glass-input" placeholder="URL (https://...)" style="flex: 2;">
+                    <button class="btn secondary" onclick="addNewLink()">追加</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notes Management Modal -->
+    <div id="notes-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content glass-card" style="width: 700px; max-width: 95%; height: 80vh; display: flex; flex-direction: column;">
+            <div class="modal-header">
+                <h3 id="notes-modal-title">ノート（メモ）管理</h3>
+                <button class="icon-btn" onclick="document.getElementById('notes-modal').style.display='none'">✕</button>
+            </div>
+            <div class="modal-body" style="display: flex; flex: 1; overflow: hidden; gap: 16px; padding: 0;">
+                <!-- Sidebar for note list -->
+                <div style="width: 200px; border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 16px;">
+                    <button class="btn secondary" onclick="createNewNote()" style="margin-bottom: 12px;">+ 新規ノート</button>
+                    <div id="notes-sidebar-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;">
+                        <!-- JS generated note items -->
+                    </div>
+                </div>
+                <!-- Main area for note content -->
+                <div style="flex: 1; display: flex; flex-direction: column; padding: 16px;">
+                    <div id="note-editor-container" style="display: none; flex-direction: column; height: 100%;">
+                        <input type="text" id="note-edit-title" class="glass-input" placeholder="タイトル" style="font-size: 1.1rem; font-weight: bold; margin-bottom: 12px;">
+                        <textarea id="note-edit-content" class="glass-input" style="flex: 1; resize: none; font-family: inherit; font-size: 0.95rem; margin-bottom: 12px;" placeholder="ノートの内容をここに入力..."></textarea>
+                        <div style="display: flex; justify-content: space-between;">
+                            <button id="note-delete-btn" class="btn text" style="color: var(--danger);">このノートを削除</button>
+                            <button id="note-save-btn" class="btn primary">保存</button>
+                        </div>
+                    </div>
+                    <div id="note-empty-state" style="flex: 1; display: flex; align-items: center; justify-content: center; color: var(--text-color); opacity: 0.6;">
+                        ノートを選択または新規作成してください
+                    </div>
                 </div>
             </div>
         </div>
