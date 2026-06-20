@@ -128,22 +128,32 @@ if (closeCalendarBtn) {
 let currentEditingEventId = null;
 const calendarModal = document.getElementById('calendar-edit-modal');
 const calendarModalInputTitle = document.getElementById('calendar-modal-input-title');
+const calendarModalInputType = document.getElementById('calendar-modal-input-type');
 const calendarModalInputDate = document.getElementById('calendar-modal-input-date');
 const calendarModalInputMemo = document.getElementById('calendar-modal-input-memo');
 const calendarModalDeleteBtn = document.getElementById('calendar-modal-delete-btn');
 const calendarModalSaveBtn = document.getElementById('calendar-modal-save-btn');
 
-function openCalendarModal(dateStr, title = "", eventId = null, memo = "") {
+function openCalendarModal(dateStr, title = "", eventId = null, memo = "", type = "面接") {
     currentEditingEventId = eventId;
     calendarModalInputTitle.value = title;
     calendarModalInputDate.value = dateStr;
     calendarModalInputMemo.value = memo;
+    if (calendarModalInputType) calendarModalInputType.value = type;
     calendarModalDeleteBtn.style.display = eventId ? 'block' : 'none';
+    
+    if (eventId) {
+        calendarModalInputDate.parentElement.style.display = 'none';
+    } else {
+        calendarModalInputDate.parentElement.style.display = 'block';
+    }
+    
     calendarModal.style.display = 'flex';
 }
 
 calendarModalSaveBtn.addEventListener('click', async () => {
     const title = calendarModalInputTitle.value.trim();
+    const typeVal = calendarModalInputType ? calendarModalInputType.value : "面接";
     const dateStr = calendarModalInputDate.value;
     const memo = calendarModalInputMemo.value.trim();
 
@@ -158,13 +168,14 @@ calendarModalSaveBtn.addEventListener('click', async () => {
         if (auth && auth.currentUser) {
             try {
                 const docRef = doc(db, "users", auth.currentUser.uid, "calendar", currentEditingEventId);
-                await updateDoc(docRef, { title: title, memo: memo, date: dateStr });
+                await updateDoc(docRef, { title: title, type: typeVal, memo: memo, date: dateStr });
                 found = true;
             } catch (e) {
                 console.warn("Firestore updateDoc failed for calendar event:", e.message);
                 const item = mockCalendarData.find(d => d.id === currentEditingEventId);
                 if (item) {
                     item.title = title;
+                    item.type = typeVal;
                     item.memo = memo;
                     item.date = dateStr;
                     found = true;
@@ -174,6 +185,7 @@ calendarModalSaveBtn.addEventListener('click', async () => {
             const item = mockCalendarData.find(d => d.id === currentEditingEventId);
             if (item) {
                 item.title = title;
+                item.type = typeVal;
                 item.memo = memo;
                 item.date = dateStr;
                 localStorage.setItem('mockCalendarData', JSON.stringify(mockCalendarData));
@@ -185,6 +197,7 @@ calendarModalSaveBtn.addEventListener('click', async () => {
         // Add new
         const newItem = {
             title: title,
+            type: typeVal,
             date: dateStr,
             createdAt: new Date().toISOString(),
             memo: memo
@@ -238,9 +251,15 @@ function initCalendar() {
         },
         eventClick: function(info) {
             const ev = info.event;
-            // FullCalendar may not expose end date easily if allDay, so we use startStr
+            // 企業テーブルの締切日はカレンダーから直接編集不可とする（編集するとカレンダー専用データとして重複してしまうため）
+            if (ev.extendedProps && ev.extendedProps.isCompanyEvent) {
+                alert("企業データの締切日は、下の企業リストの「編集」ボタンから変更してください。");
+                return;
+            }
             const memo = ev.extendedProps.memo || "";
-            openCalendarModal(ev.startStr, ev.title, ev.id, memo);
+            const rawTitle = ev.extendedProps.rawTitle || ev.title;
+            const type = ev.extendedProps.type || "面接";
+            openCalendarModal(ev.startStr, rawTitle, ev.id, memo, type);
         }
     });
     calendarInstance.render();
@@ -250,6 +269,43 @@ function updateCalendarEvents() {
     if (calendarInstance) {
         calendarInstance.removeAllEvents();
         calendarInstance.addEventSource(getCalendarEvents());
+    }
+    checkAlarms();
+}
+
+function checkAlarms() {
+    const alarmContainer = document.getElementById('alarm-container');
+    if (!alarmContainer) return;
+    
+    alarmContainer.innerHTML = '';
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const events = getCalendarEvents();
+    const urgentEvents = events.filter(ev => {
+        if (!ev.start) return false;
+        const d = new Date(ev.start);
+        d.setHours(0,0,0,0);
+        return d.getTime() === today.getTime() || d.getTime() === tomorrow.getTime();
+    });
+    
+    if (urgentEvents.length > 0) {
+        let msgs = urgentEvents.map(ev => {
+            const d = new Date(ev.start);
+            d.setHours(0,0,0,0);
+            const isToday = d.getTime() === today.getTime();
+            const rawTitle = ev.extendedProps && ev.extendedProps.rawTitle ? ev.extendedProps.rawTitle : ev.title;
+            return `「${rawTitle}」(${isToday ? '今日' : '明日'})`;
+        }).join("、 ");
+        
+        alarmContainer.innerHTML = `
+            <div class="alarm-banner">
+                <i>🔔</i>
+                <div><strong>近づいている予定があります：</strong> ${msgs}</div>
+            </div>
+        `;
     }
 }
 
@@ -266,7 +322,10 @@ function getCalendarEvents() {
                 allDay: true,
                 color: 'var(--primary)',
                 extendedProps: {
-                    memo: item.memo || ""
+                    memo: item.memo || "",
+                    type: "締切",
+                    rawTitle: title,
+                    isCompanyEvent: true
                 }
             });
         }
@@ -274,14 +333,23 @@ function getCalendarEvents() {
 
     // カレンダー専用データを追加
     mockCalendarData.forEach(ev => {
+        let evColor = 'var(--secondary)';
+        if (ev.type === '面接') evColor = '#3b82f6';
+        else if (ev.type === '締切') evColor = '#ef4444';
+        else if (ev.type === 'インターン') evColor = '#10b981';
+        else if (ev.type === '説明会') evColor = '#f59e0b';
+        else if (ev.type === 'その他') evColor = '#6b7280';
+
         events.push({
             id: ev.id,
-            title: ev.title,
+            title: `[${ev.type || '面接'}] ${ev.title}`,
             start: ev.date,
             allDay: true,
-            color: 'var(--secondary)',
+            color: evColor,
             extendedProps: {
-                memo: ev.memo || ""
+                memo: ev.memo || "",
+                type: ev.type || "面接",
+                rawTitle: ev.title
             }
         });
     });
@@ -638,6 +706,29 @@ function parseMarkdownTable(markdown) {
     }
     
     if (separatorIndex <= 0) {
+        // ヘッダーや区切り行が見つからない場合のフォールバック（AIが//区切りのデータのみ出力した場合）
+        if (markdown.includes('//') || markdown.split('/').length > 5) {
+            const validItems = formatBuilderData.filter(d => d.name.trim() !== "");
+            const expectedHeaders = ["企業名", ...validItems.map(d => d.name)];
+            
+            const results = [];
+            // // または改行でレコードを分割
+            const rows = markdown.split(/\/\/|\n/g);
+            for (let row of rows) {
+                if (row.trim() === '') continue;
+                // 各行を / で分割
+                const cells = row.split('/').map(c => c.replace(/\*\*/g, '').trim()).filter(c => c);
+                if (cells.length > 0) {
+                    const rowData = {};
+                    for (let i = 0; i < expectedHeaders.length && i < cells.length; i++) {
+                        rowData[expectedHeaders[i]] = cells[i];
+                    }
+                    if (rowData["企業名"]) results.push(rowData);
+                }
+            }
+            if (results.length > 0) return results;
+        }
+        
         throw new Error("フォーマットのヘッダー行、または区切り行（/---/ 等）が見つかりません。AIがフォーマットを省略してデータから出力しています。「ヘッダーを省略しない」ようAIに指示してください。");
     }
 

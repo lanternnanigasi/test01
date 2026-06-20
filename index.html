@@ -43,6 +43,8 @@
         </nav>
 
         <div class="container">
+            <!-- Alarm Container -->
+            <div id="alarm-container" style="margin-bottom: 16px;"></div>
             <!-- Format Generator Section -->
             <section class="glass-card format-section" style="margin-bottom: 24px;">
                 <div style="display: flex; align-items: center; gap: 8px;">
@@ -188,6 +190,16 @@
                     <input type="text" id="calendar-modal-input-title" placeholder="例: A社 一次面接" autocomplete="off">
                 </div>
                 <div class="input-group">
+                    <label>予定の種類</label>
+                    <select id="calendar-modal-input-type" style="padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(255, 255, 255, 0.5); font-family: inherit; font-size: 0.95rem; outline: none; width: 100%;">
+                        <option value="面接">面接</option>
+                        <option value="締切">締切</option>
+                        <option value="インターン">インターン</option>
+                        <option value="説明会">説明会</option>
+                        <option value="その他">その他</option>
+                    </select>
+                </div>
+                <div class="input-group">
                     <label>日付</label>
                     <input type="date" id="calendar-modal-input-date" autocomplete="off">
                 </div>
@@ -218,7 +230,7 @@
                 <p><strong>【トリプルチェック済み】個人情報、学歴、成績、特定のスキル（数学等）、資格などの情報は完全に削除・除外しております。</strong></p>
                 <hr style="margin: 16px 0; border: none; border-top: 1px solid var(--border-color);" />
                 <h4>📝 AI抽出フォーマット（プロンプト生成内容）例</h4>
-                <pre style="background: #1e293b; color: #e2e8f0; padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 0.85rem; margin-top: 8px;"><code>以下の企業情報を調査・整理し、【必ずMarkdownテーブル形式のみ】で出力してください。見やすい表形式などのリッチテキスト装飾は禁じます。
+                <pre style="background: #1e293b; color: #e2e8f0; padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 0.85rem; margin-top: 8px;"><code>以下の企業情報を調査・整理し、指定のテキストフォーマットで出力してください。見やすい表形式などのリッチテキスト装飾は【厳禁】です。
 
 ■ 抽出項目とルール
 - 企業名
@@ -235,10 +247,10 @@
 - 選考ステップ
 - インターン締切日
   (ルール: 必ずYYYY-MM-DDの形式にして、セルの末尾に &lt;!-- var_deadline: YYYY-MM-DD --&gt; と記載してください)</code></pre>
-                <p style="margin-top: 16px;">このルールを適用することで、AIは以下のようなMarkdownの生テキストのみを出力し、コピー＆ペーストで一発で当アプリに取り込めるようになります。</p>
-                <pre style="background: #1e293b; color: #e2e8f0; padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 0.85rem; margin-top: 8px;"><code>| 企業名 | 業界 | 職種 | 初任給（万円） | 志望度 | 選考ステップ | インターン締切日 |
-| --- | --- | --- | --- | --- | --- | --- |
-| 株式会社サンプル | #IT | #エンジニア | 25 &lt;!-- var_salary: 25 --&gt; | ★★★★ &lt;!-- var_star: 4 --&gt;&lt;!-- color:green --&gt; | ES -> 1次面接 -> 最終面接 | 12月20日 &lt;!-- var_deadline: 2026-12-20 --&gt; |</code></pre>
+                <p style="margin-top: 16px;">このルールを適用することで、AIは以下のような「スラッシュ区切り」の生テキストのみを出力し、コピー＆ペーストで一発で当アプリに取り込めるようになります。</p>
+                <pre style="background: #1e293b; color: #e2e8f0; padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 0.85rem; margin-top: 8px;"><code>/ 企業名 / 業界 / 職種 / 初任給（万円） / 志望度 / 選考ステップ / インターン締切日 /
+/ --- / --- / --- / --- / --- / --- / --- /
+/ 株式会社サンプル / #IT / #エンジニア / 25 &lt;!-- var_salary: 25 --&gt; / ★★★★ &lt;!-- var_star: 4 --&gt;&lt;!-- color:green --&gt; / ES -> 1次面接 -> 最終面接 / 12月20日 &lt;!-- var_deadline: 2026-12-20 --&gt; /</code></pre>
             </div>
             <div class="modal-footer">
                 <button class="btn primary" onclick="document.getElementById('help-modal').style.display='none'">閉じる</button>
