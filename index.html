@@ -40,10 +40,14 @@
     <div id="main-screen" class="screen">
         <nav class="navbar">
             <div class="logo">就活メモ</div>
+            <div style="display: flex; gap: 16px; margin: 0 auto; padding-left: 24px;">
+                <button id="nav-db-btn" class="btn text" style="font-weight: bold; background: rgba(255,255,255,0.1);">📚 企業リスト</button>
+                <button id="nav-account-btn" class="btn text">👤 アカウント・自己PR</button>
+            </div>
             <button id="logout-btn" class="btn text">ログアウト</button>
         </nav>
 
-        <div class="container">
+        <div id="db-section" class="container">
             <!-- Alarm Container -->
             <div id="alarm-container" style="margin-bottom: 16px;"></div>
             <!-- Format Generator Section -->
@@ -160,6 +164,25 @@
                 </div>
             </section>
         </div>
+
+        <!-- Account / Profile Section -->
+        <div id="account-section" class="container" style="display: none;">
+            <div class="glass-card" style="margin-bottom: 24px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <h2>👤 アカウント・自己PR設定</h2>
+                    <button id="save-account-btn" class="btn primary">保存</button>
+                </div>
+                <p style="font-size: 0.9rem; color: var(--text-color); opacity: 0.8; margin-bottom: 24px;">
+                    共通の志望動機や自己PR、経験・スキルなどをメモしておけます。このデータは後でAIに読み込ませて、企業に合わせた自己PRの自動生成などに活用する予定です。
+                </p>
+                <div id="account-fields-container" style="display: flex; flex-direction: column; gap: 24px;">
+                    <!-- JS generated fields -->
+                </div>
+                <div style="margin-top: 24px; text-align: center;">
+                    <button id="add-account-field-btn" class="btn secondary">＋ 新しい項目を追加</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script type="module" src="app.js"></script>
@@ -203,15 +226,22 @@
                     </select>
                 </div>
                 <div class="input-group">
-                    <label>日付</label>
-                    <input type="date" id="calendar-modal-input-date" autocomplete="off">
+                    <label>日付 (期間の場合は終了日も指定)</label>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <input type="date" id="calendar-modal-input-date" autocomplete="off" style="flex: 1;">
+                        <span style="color: var(--text-color);">〜</span>
+                        <input type="date" id="calendar-modal-input-end-date" autocomplete="off" style="flex: 1;" placeholder="終了日(任意)">
+                    </div>
                 </div>
                 <div class="input-group">
                     <label>詳細・メモ</label>
                     <textarea id="calendar-modal-input-memo" rows="5" placeholder="時間帯、持ち物、注意事項など" autocomplete="off"></textarea>
                 </div>
                 <div style="margin-top: 16px; display: flex; justify-content: space-between; gap: 8px;">
-                    <button id="calendar-modal-delete-btn" class="btn text" style="color: var(--danger); display: none;">削除</button>
+                    <div style="display: flex; gap: 8px;">
+                        <button id="calendar-modal-delete-btn" class="btn text" style="color: var(--danger); display: none;">削除</button>
+                        <button id="calendar-modal-complete-btn" class="btn text" style="color: var(--text-color); display: none;">✓ 終了済みにする</button>
+                    </div>
                     <div style="display: flex; gap: 8px; margin-left: auto;">
                         <button class="btn secondary" onclick="document.getElementById('calendar-edit-modal').style.display='none'">キャンセル</button>
                         <button id="calendar-modal-save-btn" class="btn primary">保存</button>

@@ -6,7 +6,7 @@ import {
     onAuthStateChanged
 } from "firebase/auth";
 import { 
-    collection, addDoc, getDocs, onSnapshot, deleteDoc, doc, updateDoc
+    collection, addDoc, getDocs, getDoc, setDoc, onSnapshot, deleteDoc, doc, updateDoc
 } from "firebase/firestore";
 
 // DOM Elements
@@ -59,7 +59,7 @@ const calendarSection = document.getElementById('calendar-section');
 const calendarEl = document.getElementById('calendar');
 
 // Version Check
-console.log("【就活メモ】 アプリバージョン: v1.2.3 (2026-06-20版)");
+console.log("【就活メモ】 アプリバージョン: v1.3.0 (2026-06-20版)");
 
 // State
 let isSignupMode = false;
@@ -132,30 +132,53 @@ const calendarModalInputType = document.getElementById('calendar-modal-input-typ
 const calendarModalInputDate = document.getElementById('calendar-modal-input-date');
 const calendarModalInputMemo = document.getElementById('calendar-modal-input-memo');
 const calendarModalDeleteBtn = document.getElementById('calendar-modal-delete-btn');
+const calendarModalCompleteBtn = document.getElementById('calendar-modal-complete-btn');
 const calendarModalSaveBtn = document.getElementById('calendar-modal-save-btn');
+const calendarModalInputEndDate = document.getElementById('calendar-modal-input-end-date');
 
-function openCalendarModal(dateStr, title = "", eventId = null, memo = "", type = "面接") {
+function openCalendarModal(dateStr, title = "", eventId = null, memo = "", type = "面接", endDate = "", isCompleted = false) {
     currentEditingEventId = eventId;
     calendarModalInputTitle.value = title;
     calendarModalInputDate.value = dateStr;
+    if (calendarModalInputEndDate) calendarModalInputEndDate.value = endDate || "";
     calendarModalInputMemo.value = memo;
     if (calendarModalInputType) calendarModalInputType.value = type;
-    calendarModalDeleteBtn.style.display = eventId ? 'block' : 'none';
+    if (calendarModalDeleteBtn) calendarModalDeleteBtn.style.display = eventId ? 'block' : 'none';
+    if (calendarModalCompleteBtn) calendarModalCompleteBtn.style.display = eventId ? 'block' : 'none';
     
-    if (eventId) {
-        calendarModalInputDate.parentElement.style.display = 'none';
-    } else {
-        calendarModalInputDate.parentElement.style.display = 'block';
+    // Toggle completed state via button logic
+    if (calendarModalCompleteBtn) {
+        if (isCompleted) {
+            calendarModalCompleteBtn.textContent = '元に戻す (未完了)';
+            calendarModalCompleteBtn.dataset.completed = "true";
+        } else {
+            calendarModalCompleteBtn.textContent = '✓ 終了済みにする';
+            calendarModalCompleteBtn.dataset.completed = "false";
+        }
     }
     
     calendarModal.style.display = 'flex';
+}
+
+if (calendarModalCompleteBtn) {
+    calendarModalCompleteBtn.addEventListener('click', () => {
+        if (calendarModalCompleteBtn.dataset.completed === "true") {
+            calendarModalCompleteBtn.dataset.completed = "false";
+            calendarModalCompleteBtn.textContent = '✓ 終了済みにする';
+        } else {
+            calendarModalCompleteBtn.dataset.completed = "true";
+            calendarModalCompleteBtn.textContent = '元に戻す (未完了)';
+        }
+    });
 }
 
 calendarModalSaveBtn.addEventListener('click', async () => {
     const title = calendarModalInputTitle.value.trim();
     const typeVal = calendarModalInputType ? calendarModalInputType.value : "面接";
     const dateStr = calendarModalInputDate.value;
+    const endDateStr = calendarModalInputEndDate ? calendarModalInputEndDate.value : "";
     const memo = calendarModalInputMemo.value.trim();
+    const isCompleted = calendarModalCompleteBtn ? (calendarModalCompleteBtn.dataset.completed === "true") : false;
 
     if (!title || !dateStr) {
         alert("タイトルと日付を入力してください。");
@@ -168,7 +191,7 @@ calendarModalSaveBtn.addEventListener('click', async () => {
         if (auth && auth.currentUser) {
             try {
                 const docRef = doc(db, "users", auth.currentUser.uid, "calendar", currentEditingEventId);
-                await updateDoc(docRef, { title: title, type: typeVal, memo: memo, date: dateStr });
+                await updateDoc(docRef, { title: title, type: typeVal, memo: memo, date: dateStr, endDate: endDateStr, isCompleted: isCompleted });
                 found = true;
             } catch (e) {
                 console.warn("Firestore updateDoc failed for calendar event:", e.message);
@@ -178,6 +201,8 @@ calendarModalSaveBtn.addEventListener('click', async () => {
                     item.type = typeVal;
                     item.memo = memo;
                     item.date = dateStr;
+                    item.endDate = endDateStr;
+                    item.isCompleted = isCompleted;
                     found = true;
                 }
             }
@@ -188,6 +213,8 @@ calendarModalSaveBtn.addEventListener('click', async () => {
                 item.type = typeVal;
                 item.memo = memo;
                 item.date = dateStr;
+                item.endDate = endDateStr;
+                item.isCompleted = isCompleted;
                 localStorage.setItem('mockCalendarData', JSON.stringify(mockCalendarData));
                 found = true;
             }
@@ -199,6 +226,8 @@ calendarModalSaveBtn.addEventListener('click', async () => {
             title: title,
             type: typeVal,
             date: dateStr,
+            endDate: endDateStr,
+            isCompleted: isCompleted,
             createdAt: new Date().toISOString(),
             memo: memo
         };
@@ -259,7 +288,9 @@ function initCalendar() {
             const memo = ev.extendedProps.memo || "";
             const rawTitle = ev.extendedProps.rawTitle || ev.title;
             const type = ev.extendedProps.type || "面接";
-            openCalendarModal(ev.startStr, rawTitle, ev.id, memo, type);
+            const endDate = ev.extendedProps.endDate || "";
+            const isCompleted = ev.extendedProps.isCompleted || false;
+            openCalendarModal(ev.startStr, rawTitle, ev.id, memo, type, endDate, isCompleted);
         }
     });
     calendarInstance.render();
@@ -343,18 +374,41 @@ function getCalendarEvents() {
         const foundType = calendarEventTypes.find(t => t.name === ev.type);
         if (foundType) evColor = foundType.color;
 
+        let endDateForCalendar = ev.endDate;
+        if (endDateForCalendar) {
+            const endObj = new Date(endDateForCalendar);
+            endObj.setDate(endObj.getDate() + 1);
+            endDateForCalendar = endObj.toISOString().split('T')[0];
+        }
+        
+        let classNames = [];
+        let bgColor = '#fff';
+        let borderColor = evColor;
+        let textColor = '#000';
+        
+        if (ev.isCompleted) {
+            classNames.push('event-completed');
+            bgColor = 'rgba(255, 255, 255, 0.3)';
+            borderColor = 'rgba(0, 0, 0, 0.2)';
+            textColor = 'rgba(0, 0, 0, 0.4)';
+        }
+
         events.push({
             id: ev.id,
             title: `[${ev.type || '面接'}] ${ev.title}`,
             start: ev.date,
+            end: endDateForCalendar,
             allDay: true,
-            backgroundColor: '#fff',
-            borderColor: evColor,
-            textColor: '#000',
+            backgroundColor: bgColor,
+            borderColor: borderColor,
+            textColor: textColor,
+            classNames: classNames,
             extendedProps: {
                 memo: ev.memo || "",
                 type: ev.type || "面接",
-                rawTitle: ev.title
+                rawTitle: ev.title,
+                endDate: ev.endDate || "",
+                isCompleted: ev.isCompleted || false
             }
         });
     });
@@ -1009,8 +1063,9 @@ function parseMarkdownTable(markdown) {
                 const cells = row.split('/').map(c => c.replace(/\*\*/g, '').trim()).filter(c => c);
                 if (cells.length > 0) {
                     const rowData = {};
-                    for (let i = 0; i < expectedHeaders.length && i < cells.length; i++) {
-                        rowData[expectedHeaders[i]] = cells[i];
+                    for (let i = 0; i < cells.length; i++) {
+                        const header = expectedHeaders[i] || `未設定項目${i}`;
+                        rowData[header] = cells[i];
                     }
                     if (rowData["企業名"] && rowData["企業名"] !== "企業名" && !rowData["企業名"].includes("対象企業名") && !rowData["企業名"].includes("---")) results.push(rowData);
                 }
@@ -2271,4 +2326,149 @@ function saveCurrentNotes(newNotesArray) {
     if (!item._meta) item._meta = {};
     item._meta.notes = newNotesArray;
     updateItemData(currentNoteCompanyId, { _meta: item._meta });
+}
+
+// --- Account Screen Logic ---
+const navDbBtn = document.getElementById('nav-db-btn');
+const navAccountBtn = document.getElementById('nav-account-btn');
+const dbSection = document.getElementById('db-section');
+const accountSection = document.getElementById('account-section');
+
+if (navDbBtn && navAccountBtn) {
+    navDbBtn.addEventListener('click', () => {
+        dbSection.style.display = 'block';
+        accountSection.style.display = 'none';
+        navDbBtn.style.background = 'rgba(255,255,255,0.1)';
+        navAccountBtn.style.background = 'transparent';
+    });
+    navAccountBtn.addEventListener('click', () => {
+        dbSection.style.display = 'none';
+        accountSection.style.display = 'block';
+        navAccountBtn.style.background = 'rgba(255,255,255,0.1)';
+        navDbBtn.style.background = 'transparent';
+        loadAccountData();
+    });
+}
+
+let accountData = [];
+const DEFAULT_ACCOUNT_FIELDS = [
+    { title: "志望動機（なぜこの会社・職種なのか）", value: "" },
+    { title: "自己PR（自分の強みやアピールポイント）", value: "" },
+    { title: "将来のキャリアプラン（入社後に挑戦したいこと）", value: "" },
+    { title: "これまでの職務経歴・実績（どのような成果を上げたか）", value: "" },
+    { title: "活かせる経験・スキル・資格", value: "" },
+    { title: "仕事で直面した困難とそれを乗り越えた方法", value: "" },
+    { title: "自分の長所と短所", value: "" },
+    { title: "仕事をする上で大切にしていること・こだわり", value: "" },
+    { title: "趣味・特技", value: "" },
+    { title: "本人希望記入欄（勤務地、職種、給与、勤務時間などの希望）", value: "" },
+    { title: "現在の就職活動の状況・入社可能時期", value: "" }
+];
+
+async function loadAccountData() {
+    if (auth && auth.currentUser) {
+        try {
+            const docRef = doc(db, "users", auth.currentUser.uid, "profile", "data");
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                accountData = docSnap.data().fields || [];
+            } else {
+                accountData = JSON.parse(JSON.stringify(DEFAULT_ACCOUNT_FIELDS));
+            }
+        } catch (e) {
+            console.warn("Failed to load account data from Firebase:", e);
+            loadLocalAccountData();
+        }
+    } else {
+        loadLocalAccountData();
+    }
+    renderAccountFields();
+}
+
+function loadLocalAccountData() {
+    const local = localStorage.getItem('accountData');
+    if (local) {
+        accountData = JSON.parse(local);
+    } else {
+        accountData = JSON.parse(JSON.stringify(DEFAULT_ACCOUNT_FIELDS));
+    }
+}
+
+function renderAccountFields() {
+    const container = document.getElementById('account-fields-container');
+    if (!container) return;
+    container.innerHTML = '';
+    
+    accountData.forEach((field, index) => {
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'input-group';
+        itemDiv.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <input type="text" value="${field.title}" class="account-field-title" data-index="${index}" style="font-weight: bold; font-size: 1.1rem; border: none; background: transparent; color: var(--text-color); width: 80%; outline: none;" placeholder="項目のタイトル">
+                <button class="btn text account-field-delete-btn" data-index="${index}" style="color: var(--danger); padding: 4px;">✕ 削除</button>
+            </div>
+            <textarea class="account-field-value" data-index="${index}" rows="4" placeholder="内容を入力..." style="width: 100%; border-radius: 8px; border: 1px solid var(--border-color); padding: 12px; background: rgba(255, 255, 255, 0.5);">${field.value}</textarea>
+        `;
+        container.appendChild(itemDiv);
+    });
+    
+    document.querySelectorAll('.account-field-title').forEach(input => {
+        input.addEventListener('change', (e) => {
+            const idx = parseInt(e.target.dataset.index);
+            accountData[idx].title = e.target.value;
+        });
+    });
+    document.querySelectorAll('.account-field-value').forEach(textarea => {
+        textarea.addEventListener('change', (e) => {
+            const idx = parseInt(e.target.dataset.index);
+            accountData[idx].value = e.target.value;
+        });
+    });
+    document.querySelectorAll('.account-field-delete-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const idx = parseInt(e.target.dataset.index);
+            if (confirm("この項目を削除しますか？")) {
+                accountData.splice(idx, 1);
+                renderAccountFields();
+            }
+        });
+    });
+}
+
+const addAccountFieldBtn = document.getElementById('add-account-field-btn');
+if (addAccountFieldBtn) {
+    addAccountFieldBtn.addEventListener('click', () => {
+        accountData.push({ title: "新しい項目", value: "" });
+        renderAccountFields();
+    });
+}
+
+const saveAccountBtn = document.getElementById('save-account-btn');
+if (saveAccountBtn) {
+    saveAccountBtn.addEventListener('click', async () => {
+        document.querySelectorAll('.account-field-title').forEach(input => {
+            const idx = parseInt(input.dataset.index);
+            accountData[idx].title = input.value;
+        });
+        document.querySelectorAll('.account-field-value').forEach(textarea => {
+            const idx = parseInt(textarea.dataset.index);
+            accountData[idx].value = textarea.value;
+        });
+        
+        saveAccountBtn.textContent = '保存中...';
+        
+        if (auth && auth.currentUser) {
+            try {
+                await setDoc(doc(db, "users", auth.currentUser.uid, "profile", "data"), { fields: accountData });
+            } catch (e) {
+                console.warn("Failed to save to Firebase:", e);
+                localStorage.setItem('accountData', JSON.stringify(accountData));
+            }
+        } else {
+            localStorage.setItem('accountData', JSON.stringify(accountData));
+        }
+        
+        saveAccountBtn.textContent = '保存しました！';
+        setTimeout(() => saveAccountBtn.textContent = '保存', 2000);
+    });
 }
