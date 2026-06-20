@@ -315,13 +315,17 @@ function getCalendarEvents() {
         if (item.isHidden && !showHiddenCheckbox.checked) return;
         if (item._meta && item._meta.deadline && !item._meta.isCustomEvent) {
             const title = (item['企業名'] || item['会社名'] || '不明な企業') + ' 締切';
+            let deadlineColor = 'var(--primary)';
+            const deadlineType = calendarEventTypes.find(t => t.name === "締切");
+            if (deadlineType) deadlineColor = deadlineType.color;
+
             events.push({
                 id: item.id,
                 title: title,
                 start: item._meta.deadline,
                 allDay: true,
                 backgroundColor: '#fff',
-                borderColor: 'var(--primary)',
+                borderColor: deadlineColor,
                 textColor: '#000',
                 extendedProps: {
                     memo: item.memo || "",
@@ -336,11 +340,8 @@ function getCalendarEvents() {
     // カレンダー専用データを追加
     mockCalendarData.forEach(ev => {
         let evColor = 'var(--secondary)';
-        if (ev.type === '面接') evColor = '#3b82f6';
-        else if (ev.type === '締切') evColor = '#ef4444';
-        else if (ev.type === 'インターン') evColor = '#10b981';
-        else if (ev.type === '説明会') evColor = '#f59e0b';
-        else if (ev.type === 'その他') evColor = '#6b7280';
+        const foundType = calendarEventTypes.find(t => t.name === ev.type);
+        if (foundType) evColor = foundType.color;
 
         events.push({
             id: ev.id,
@@ -443,8 +444,24 @@ logoutBtn.addEventListener('click', () => {
     }
 });
 
-let formatBuilderData = [
-    { id: Date.now(), name: "", description: "", attributes: [] }
+let formatBuilderData = [];
+
+const defaultFormatBuilderData = [
+    { id: 1, name: "業界", attributes: [{id: 11, val: "業界名には「#IT」などのようにハッシュタグを付けてください", type: "rule"}] },
+    { id: 2, name: "職種", attributes: [{id: 21, val: "職種名にはハッシュタグを付けてください", type: "rule"}] },
+    { id: 3, name: "初任給（万円）", attributes: [{id: 31, val: "必ず数値のみを抽出し、セルの末尾に <!-- var_salary: (抽出した数値) --> と記載してください", type: "rule"}] },
+    { id: 4, name: "志望度", attributes: [{id: 41, val: "★の数で表現し、セルの末尾に <!-- var_star: (数値) --> と記載してください", type: "rule"}, {id: 42, val: "志望度が★4以上の場合は、セルの末尾に <!-- color:green --> と記載してください", type: "rule"}, {id: 43, val: "志望度が★2以下の場合は、セルの末尾に <!-- color:red --> と記載してください", type: "rule"}] },
+    { id: 5, name: "選考ステップ", attributes: [] },
+    { id: 6, name: "インターン締切日", attributes: [{id: 61, val: "必ずYYYY-MM-DDの形式にして、セルの末尾に <!-- var_deadline: YYYY-MM-DD --> と記載してください", type: "rule"}] },
+    { id: 7, name: "特記事項", attributes: [{id: 71, val: "勤務形態や特定派遣であるなど、懸念点や特殊な条件がある場合のみ記載し、特にない場合は「なし」としてください", type: "rule"}] }
+];
+
+let calendarEventTypes = [
+    { name: "面接", color: "#3b82f6" },
+    { name: "締切", color: "#ef4444" },
+    { name: "インターン", color: "#10b981" },
+    { name: "説明会", color: "#f59e0b" },
+    { name: "その他", color: "#6b7280" }
 ];
 
 const availableColors = [
@@ -616,6 +633,9 @@ async function loadSettings() {
                 if (d.id === "formatBuilder" && d.data().data) {
                     formatBuilderData = JSON.parse(d.data().data);
                 }
+                if (d.id === "calendarEventTypes" && d.data().data) {
+                    calendarEventTypes = JSON.parse(d.data().data);
+                }
             });
         } catch (e) {
             console.error(e);
@@ -623,30 +643,107 @@ async function loadSettings() {
     } else {
         const saved = localStorage.getItem('formatBuilderData');
         if (saved) formatBuilderData = JSON.parse(saved);
+        
+        const savedTypes = localStorage.getItem('calendarEventTypes');
+        if (savedTypes) calendarEventTypes = JSON.parse(savedTypes);
     }
 
-    // ユーザーの利便性のため、特記事項が含まれていなければ追加
-    if (!formatBuilderData.some(d => d.name === "特記事項")) {
+    if (formatBuilderData.length === 0) {
+        formatBuilderData = JSON.parse(JSON.stringify(defaultFormatBuilderData));
+    } else if (!formatBuilderData.some(d => d.name === "特記事項")) {
         formatBuilderData.push({
             id: Date.now(), 
             name: "特記事項", 
             attributes: [{ id: Date.now()+1, val: "勤務形態や特定派遣であるなど、懸念点や特殊な条件がある場合のみ記載し、特にない場合は「なし」としてください", type: "rule" }]
         });
-        // 保存する
-        const dataStr = JSON.stringify(formatBuilderData);
-        if (auth && auth.currentUser) {
-            try {
-                const docRef = doc(db, "users", auth.currentUser.uid, "settings", "formatBuilder");
-                updateDoc(docRef, { data: dataStr }).catch(() => {
-                    addDoc(collection(db, "users", auth.currentUser.uid, "settings"), { data: dataStr });
-                });
-            } catch(e){}
-        } else {
-            localStorage.setItem('formatBuilderData', dataStr);
-        }
     }
 
     renderFormatBuilder();
+    renderEventTypes();
+    updateCalendarModalTypeSelect();
+}
+
+function saveCalendarEventTypes() {
+    const dataStr = JSON.stringify(calendarEventTypes);
+    if (auth && auth.currentUser) {
+        const docRef = doc(db, "users", auth.currentUser.uid, "settings", "calendarEventTypes");
+        updateDoc(docRef, { data: dataStr }).catch(() => {
+            addDoc(collection(db, "users", auth.currentUser.uid, "settings"), { data: dataStr });
+        });
+    } else {
+        localStorage.setItem('calendarEventTypes', dataStr);
+    }
+}
+
+function renderEventTypes() {
+    const list = document.getElementById('event-types-list');
+    if (!list) return;
+    list.innerHTML = '';
+    calendarEventTypes.forEach((t, index) => {
+        const div = document.createElement('div');
+        div.style.display = 'flex';
+        div.style.alignItems = 'center';
+        div.style.gap = '8px';
+        div.style.padding = '8px';
+        div.style.border = '1px solid var(--border-color)';
+        div.style.borderRadius = '4px';
+        
+        const colorIndicator = document.createElement('div');
+        colorIndicator.style.width = '16px';
+        colorIndicator.style.height = '16px';
+        colorIndicator.style.borderRadius = '50%';
+        colorIndicator.style.backgroundColor = t.color;
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = t.name;
+        nameSpan.style.flex = "1";
+        
+        const delBtn = document.createElement('button');
+        delBtn.className = 'icon-btn';
+        delBtn.textContent = '✕';
+        delBtn.onclick = () => {
+            calendarEventTypes.splice(index, 1);
+            saveCalendarEventTypes();
+            renderEventTypes();
+            updateCalendarModalTypeSelect();
+            updateCalendarEvents();
+        };
+        
+        div.appendChild(colorIndicator);
+        div.appendChild(nameSpan);
+        div.appendChild(delBtn);
+        list.appendChild(div);
+    });
+}
+
+window.addNewEventType = function() {
+    const nameInput = document.getElementById('new-event-type-name');
+    const colorInput = document.getElementById('new-event-type-color');
+    const name = nameInput.value.trim();
+    if (name) {
+        calendarEventTypes.push({ name: name, color: colorInput.value });
+        saveCalendarEventTypes();
+        renderEventTypes();
+        updateCalendarModalTypeSelect();
+        updateCalendarEvents();
+        nameInput.value = "";
+    }
+};
+
+window.openEventTypeModal = function() {
+    document.getElementById('event-type-modal').style.display = 'flex';
+};
+
+function updateCalendarModalTypeSelect() {
+    const select = document.getElementById('calendar-modal-input-type');
+    if (!select) return;
+    select.innerHTML = '';
+    calendarEventTypes.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t.name;
+        opt.textContent = t.name;
+        select.appendChild(opt);
+    });
 }
 
 // --- Format Generator Logic ---
