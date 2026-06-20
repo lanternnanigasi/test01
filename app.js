@@ -447,12 +447,12 @@ logoutBtn.addEventListener('click', () => {
 let formatBuilderData = [];
 
 const defaultFormatBuilderData = [
-    { id: 1, name: "業界", attributes: [{id: 11, val: "業界名には「#IT」などのようにハッシュタグを付けてください", type: "rule"}] },
-    { id: 2, name: "職種", attributes: [{id: 21, val: "職種名にはハッシュタグを付けてください", type: "rule"}] },
-    { id: 3, name: "初任給（万円）", attributes: [{id: 31, val: "必ず数値のみを抽出し、セルの末尾に <!-- var_salary: (抽出した数値) --> と記載してください", type: "rule"}] },
-    { id: 4, name: "志望度", attributes: [{id: 41, val: "★の数で表現し、セルの末尾に <!-- var_star: (数値) --> と記載してください", type: "rule"}, {id: 42, val: "志望度が★4以上の場合は、セルの末尾に <!-- color:green --> と記載してください", type: "rule"}, {id: 43, val: "志望度が★2以下の場合は、セルの末尾に <!-- color:red --> と記載してください", type: "rule"}] },
+    { id: 1, name: "業界", attributes: [{id: 11, val: "業界名には「#IT」などのように", type: "hashtag"}] },
+    { id: 2, name: "職種", attributes: [{id: 21, val: "職種名には", type: "hashtag"}] },
+    { id: 3, name: "初任給（万円）", attributes: [{id: 31, val: "必ず数値のみを抽出し", type: "variable"}] },
+    { id: 4, name: "志望度", attributes: [{id: 41, val: "★の数で表現し", type: "variable"}, {id: 42, val: "★4以上", color: "green", type: "color"}, {id: 43, val: "★2以下", color: "red", type: "color"}] },
     { id: 5, name: "選考ステップ", attributes: [] },
-    { id: 6, name: "インターン締切日", attributes: [{id: 61, val: "必ずYYYY-MM-DDの形式にして、セルの末尾に <!-- var_deadline: YYYY-MM-DD --> と記載してください", type: "rule"}] },
+    { id: 6, name: "インターン締切日", attributes: [{id: 61, val: "必ずYYYY-MM-DDの形式にして", type: "variable"}] },
     { id: 7, name: "特記事項", attributes: [{id: 71, val: "勤務形態や特定派遣であるなど、懸念点や特殊な条件がある場合のみ記載し、特にない場合は「なし」としてください", type: "rule"}] }
 ];
 
@@ -590,6 +590,36 @@ function renderFormatBuilder() {
                         
                         extraDiv.appendChild(condInput);
                         extraDiv.appendChild(colSelect);
+                    } else if (attr.type === "hashtag") {
+                        const tagInput = document.createElement('input');
+                        tagInput.type = 'text';
+                        tagInput.placeholder = "付与するタグや条件 (例: #IT, #BtoB)";
+                        tagInput.value = attr.val || "";
+                        tagInput.style.width = "200px";
+                        tagInput.style.fontSize = "0.85rem";
+                        tagInput.style.padding = "4px";
+                        tagInput.addEventListener('input', (e) => attr.val = e.target.value);
+                        extraDiv.appendChild(tagInput);
+                    } else if (attr.type === "variable") {
+                        const varInput = document.createElement('input');
+                        varInput.type = 'text';
+                        varInput.placeholder = "抽出する内容 (例: 初任給の数値のみ)";
+                        varInput.value = attr.val || "";
+                        varInput.style.width = "200px";
+                        varInput.style.fontSize = "0.85rem";
+                        varInput.style.padding = "4px";
+                        varInput.addEventListener('input', (e) => attr.val = e.target.value);
+                        extraDiv.appendChild(varInput);
+                    } else if (attr.type === "rule") {
+                        const ruleInput = document.createElement('input');
+                        ruleInput.type = 'text';
+                        ruleInput.placeholder = "自由なルールを記述";
+                        ruleInput.value = attr.val || "";
+                        ruleInput.style.width = "250px";
+                        ruleInput.style.fontSize = "0.85rem";
+                        ruleInput.style.padding = "4px";
+                        ruleInput.addEventListener('input', (e) => attr.val = e.target.value);
+                        extraDiv.appendChild(ruleInput);
                     }
                 };
                 renderAttrExtra();
@@ -782,13 +812,17 @@ generateFormatBtn.addEventListener('click', async () => {
         if (item.attributes && item.attributes.length > 0) {
             item.attributes.forEach(attr => {
                 if (attr.type === "hashtag") {
-                    prompt += `  (ルール: 重要なキーワードには「#IT」「#BtoB」のようにハッシュタグを付けてください)\n`;
+                    const ruleVal = attr.val ? attr.val : "重要なキーワードには「#IT」「#BtoB」のように";
+                    prompt += `  (ルール: ${ruleVal}ハッシュタグを付けてください)\n`;
                 } else if (attr.type === "color" && attr.condition) {
                     prompt += `  (ルール: 「${attr.condition}」に該当する場合は、セルの末尾に <!-- color:${attr.color} --> と記載してください)\n`;
                 } else if (attr.type === "variable") {
                     const varName = `var_${varCount.toString().padStart(3, '0')}`;
-                    prompt += `  (ルール: 必ず数値や日付のみを抽出し、セルの末尾に <!-- ${varName}: (抽出した値) --> と記載してください)\n`;
+                    const ruleVal = attr.val ? attr.val : "必ず数値や日付のみを抽出し";
+                    prompt += `  (ルール: ${ruleVal}、セルの末尾に <!-- ${varName}: (抽出した値) --> と記載してください)\n`;
                     varCount++;
+                } else if (attr.type === "rule" && attr.val) {
+                    prompt += `  (ルール: ${attr.val})\n`;
                 }
             });
         }
@@ -796,10 +830,10 @@ generateFormatBtn.addEventListener('click', async () => {
 
     // 中間
     prompt += `\n人間が見やすい表などの出力ではなく、下に示すテキストフォーマットでのみ出力せよ。\n\n`;
-    prompt += `出力フォーマット：\n/ ${headers} /\n/ ${dividers} /\n/ (対象企業名) / (調査内容) / ... /\n\n`;
+    prompt += `出力フォーマット：\n/ (対象企業名1) / (調査内容) / ... /\n/ (対象企業名2) / (調査内容) / ... /\n\n`;
     
     // 末尾
-    prompt += `必ず「/」で情報が区切られたテキスト記法で、文字によってのみ出力すること。Markdownの表として出力してはならない。`;
+    prompt += `必ず「/」で情報が区切られたテキスト記法で、文字によってのみ出力すること。Markdownの表（ヘッダー行や --- などの区切り線）として出力してはならない。`;
     
     formatOutput.value = prompt;
 });
