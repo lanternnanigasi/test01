@@ -1184,6 +1184,16 @@ generateFormatBtn.addEventListener('click', async () => {
     prompt += `必ず「/」で情報が区切られたデータ行のみを出力すること。Markdownの表形式(ヘッダー行や---の区切り線)は絶対に生成しないでください。`;
     
     formatOutput.value = prompt;
+
+    // API連携用に、生成された最終プロンプトテキスト自体もFirestoreに保存する
+    if (auth && auth.currentUser) {
+        try {
+            const promptDocRef = doc(db, "users", auth.currentUser.uid, "settings", "latestPrompt");
+            await setDoc(promptDocRef, { text: prompt }, { merge: true });
+        } catch (e) {
+            console.warn("Failed to save latest prompt to Firebase:", e);
+        }
+    }
 });
 
 copyFormatBtn.addEventListener('click', () => {
