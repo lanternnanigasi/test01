@@ -463,6 +463,7 @@ function updateUI() {
 
 if (auth) {
     onAuthStateChanged(auth, async (user) => {
+        if (user) alert("あなたのUID: " + user.uid); // ★この行を追加
         await loadSettings();
         updateUI();
     });
