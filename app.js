@@ -366,6 +366,32 @@ function getCalendarEvents() {
                 }
             });
         }
+        
+        // 追加ルールによる動的カレンダーイベントの描画
+        if (item.customEvents && Array.isArray(item.customEvents)) {
+            item.customEvents.forEach(cev => {
+                let evColor = 'var(--secondary)';
+                const foundType = calendarEventTypes.find(t => t.name === cev.type);
+                if (foundType) evColor = foundType.color;
+
+                const title = (item['企業名'] || item['会社名'] || '不明な企業') + ' ' + cev.type;
+                events.push({
+                    id: item.id + '_' + cev.type + '_' + cev.date,
+                    title: title,
+                    start: cev.date,
+                    allDay: true,
+                    backgroundColor: '#fff',
+                    borderColor: evColor,
+                    textColor: '#000',
+                    extendedProps: {
+                        memo: item.memo || "",
+                        type: cev.type,
+                        rawTitle: title,
+                        isCompanyEvent: true
+                    }
+                });
+            });
+        }
     });
 
     // カレンダー専用データを追加
@@ -746,7 +772,10 @@ function renderFormatBuilder() {
                     {val: "hashtag", label: "# ハッシュタグ化"},
                     {val: "color", label: "🎨 色付け条件"},
                     {val: "variable", label: "📊 変数(数値・日付等)"},
-                    {val: "rule", label: "📝 ルール"}
+                    {val: "rule", label: "📝 ルール"},
+                    {val: "calendar", label: "📅 カレンダー追加"},
+                    {val: "memo", label: "📝 メモ追加"},
+                    {val: "rewrite", label: "✨ 自己PR等リライト"}
                 ];
                 types.forEach(t => {
                     const opt = document.createElement('option');
@@ -831,6 +860,87 @@ function renderFormatBuilder() {
                             saveFormatBuilderDataAsync();
                         });
                         extraDiv.appendChild(ruleInput);
+                    } else if (attr.type === "calendar") {
+                        const condInput = document.createElement('input');
+                        condInput.type = 'text';
+                        condInput.placeholder = "条件(例: 面接がある場合)";
+                        condInput.value = attr.condition || "";
+                        condInput.style.width = "120px";
+                        condInput.style.fontSize = "0.85rem";
+                        condInput.style.padding = "4px";
+                        condInput.addEventListener('input', (e) => { attr.condition = e.target.value; saveFormatBuilderDataAsync(); });
+                        
+                        const typeInput = document.createElement('input');
+                        typeInput.type = 'text';
+                        typeInput.placeholder = "種類(例: 面接)";
+                        typeInput.value = attr.eventType || "";
+                        typeInput.style.width = "80px";
+                        typeInput.style.fontSize = "0.85rem";
+                        typeInput.style.padding = "4px";
+                        typeInput.addEventListener('input', (e) => { attr.eventType = e.target.value; saveFormatBuilderDataAsync(); });
+
+                        const dateInput = document.createElement('input');
+                        dateInput.type = 'text';
+                        dateInput.placeholder = "日付の指定(例: その面接日)";
+                        dateInput.value = attr.dateRule || "";
+                        dateInput.style.width = "120px";
+                        dateInput.style.fontSize = "0.85rem";
+                        dateInput.style.padding = "4px";
+                        dateInput.addEventListener('input', (e) => { attr.dateRule = e.target.value; saveFormatBuilderDataAsync(); });
+
+                        extraDiv.appendChild(condInput);
+                        extraDiv.appendChild(typeInput);
+                        extraDiv.appendChild(dateInput);
+                    } else if (attr.type === "memo") {
+                        const condInput = document.createElement('input');
+                        condInput.type = 'text';
+                        condInput.placeholder = "条件(例: 企業特徴を調べた場合)";
+                        condInput.value = attr.condition || "";
+                        condInput.style.width = "150px";
+                        condInput.style.fontSize = "0.85rem";
+                        condInput.style.padding = "4px";
+                        condInput.addEventListener('input', (e) => { attr.condition = e.target.value; saveFormatBuilderDataAsync(); });
+
+                        const titleInput = document.createElement('input');
+                        titleInput.type = 'text';
+                        titleInput.placeholder = "タイトル(例: 企業特性)";
+                        titleInput.value = attr.memoTitle || "";
+                        titleInput.style.width = "150px";
+                        titleInput.style.fontSize = "0.85rem";
+                        titleInput.style.padding = "4px";
+                        titleInput.addEventListener('input', (e) => { attr.memoTitle = e.target.value; saveFormatBuilderDataAsync(); });
+
+                        extraDiv.appendChild(condInput);
+                        extraDiv.appendChild(titleInput);
+                    } else if (attr.type === "rewrite") {
+                        const targetSelect = document.createElement('select');
+                        targetSelect.style.fontSize = "0.85rem";
+                        targetSelect.style.padding = "4px";
+                        
+                        // Option for core-values + dynamic account fields
+                        const opts = ["就活の軸", ...accountData.map(a => a.title)];
+                        if (!opts.includes(attr.targetField)) attr.targetField = opts[0];
+                        
+                        opts.forEach(t => {
+                            const opt = document.createElement('option');
+                            opt.value = t;
+                            opt.textContent = t;
+                            if (attr.targetField === t) opt.selected = true;
+                            targetSelect.appendChild(opt);
+                        });
+                        targetSelect.addEventListener('change', (e) => { attr.targetField = e.target.value; saveFormatBuilderDataAsync(); });
+
+                        const limitInput = document.createElement('input');
+                        limitInput.type = 'text';
+                        limitInput.placeholder = "文字数制限等(例: 全角400字以内)";
+                        limitInput.value = attr.charLimit || "";
+                        limitInput.style.width = "180px";
+                        limitInput.style.fontSize = "0.85rem";
+                        limitInput.style.padding = "4px";
+                        limitInput.addEventListener('input', (e) => { attr.charLimit = e.target.value; saveFormatBuilderDataAsync(); });
+
+                        extraDiv.appendChild(targetSelect);
+                        extraDiv.appendChild(limitInput);
                     }
                 };
                 renderAttrExtra();
@@ -1014,7 +1124,25 @@ generateFormatBtn.addEventListener('click', async () => {
     localStorage.setItem('formatBuilderData', dataStr);
     
     // 冒頭
-    let prompt = `以下の企業情報を調査・整理し、指定のフォーマットで出力してください。見やすい表形式などのリッチテキスト装飾は【厳禁】です。\n\n■ 抽出項目とルール\n- 企業名\n`;
+    let prompt = ``;
+    
+    // アカウント情報・就活の軸をプロンプトに追加
+    const coreValuesEl = document.getElementById('account-core-values');
+    const coreValuesText = coreValuesEl ? coreValuesEl.value.trim() : "";
+    
+    const validAccountData = accountData.filter(a => a.title && a.value && a.value.trim() !== "");
+    
+    if (coreValuesText || validAccountData.length > 0) {
+        prompt += `【ユーザーの基本情報・就活の軸】\n以下の情報を参考に、企業ごとにパーソナライズした調査やリライトを行ってください。\n\n`;
+        if (coreValuesText) {
+            prompt += `- 就活の軸 (絶対に譲れないこと等):\n${coreValuesText}\n\n`;
+        }
+        validAccountData.forEach(a => {
+            prompt += `- ${a.title}:\n${a.value}\n\n`;
+        });
+    }
+
+    prompt += `以下の企業情報を調査・整理し、指定のフォーマットで出力してください。見やすい表形式などのリッチテキスト装飾は【厳禁】です。\n\n■ 抽出項目とルール\n- 企業名\n`;
 
     let varCount = 1;
     validItems.forEach(item => {
@@ -1037,6 +1165,12 @@ generateFormatBtn.addEventListener('click', async () => {
                     varCount++;
                 } else if (attr.type === "rule" && attr.val) {
                     prompt += `  (ルール: ${attr.val})\n`;
+                } else if (attr.type === "calendar") {
+                    prompt += `  (ルール: 「${attr.condition}」に該当する場合は、セルの末尾に <!-- calendar_${attr.eventType}: ${attr.dateRule} --> と記載してください。※必ずこのHTMLコメント形式を使うこと)\n`;
+                } else if (attr.type === "memo") {
+                    prompt += `  (ルール: 「${attr.condition}」に該当する場合は、調べて要約した内容をセルの末尾に <!-- memo_${attr.memoTitle}: (内容) --> と記載してください。※長文の場合、改行は必ず「<br>」を使い、文中には絶対に「/」を含めないこと)\n`;
+                } else if (attr.type === "rewrite") {
+                    prompt += `  (ルール: ユーザーの「${attr.targetField}」をこの企業の特性に合わせてリライトし、セルの末尾に <!-- memo_${attr.targetField}最適化: (内容) --> と記載してください。※${attr.charLimit ? `文字数制限: ${attr.charLimit}。` : ''}改行は必ず「<br>」を使い、文中には絶対に「/」を含めないこと)\n`;
                 }
             });
         }
@@ -1091,10 +1225,33 @@ function parseMarkdownTable(markdown) {
                 const cells = row.split('/').map(c => c.replace(/\*\*/g, '').trim()).filter(c => c);
                 if (cells.length > 0) {
                     const rowData = {};
+                    let extractedMemo = "";
+                    let extractedCalendar = [];
                     for (let i = 0; i < cells.length; i++) {
                         const header = expectedHeaders[i] || `未設定項目${i}`;
-                        rowData[header] = cells[i];
+                        let cellText = cells[i];
+
+                        const calRegex = /<!-- calendar_(.*?):\s*(.*?) -->/g;
+                        let calMatch;
+                        while ((calMatch = calRegex.exec(cellText)) !== null) {
+                            extractedCalendar.push({ type: calMatch[1].trim(), date: calMatch[2].trim() });
+                        }
+                        cellText = cellText.replace(/<!-- calendar_.*? -->/g, '');
+
+                        const memoRegex = /<!-- memo_(.*?):\s*(.*?) -->/g;
+                        let memoMatch;
+                        while ((memoMatch = memoRegex.exec(cellText)) !== null) {
+                            const title = memoMatch[1].trim();
+                            const content = memoMatch[2].trim().replace(/<br>/g, "\n");
+                            extractedMemo += `### ${title}\n${content}\n\n`;
+                        }
+                        cellText = cellText.replace(/<!-- memo_.*? -->/g, '');
+
+                        rowData[header] = cellText.trim();
                     }
+                    if (extractedMemo) rowData._parsedMemo = extractedMemo.trim();
+                    if (extractedCalendar.length > 0) rowData._parsedCalendar = extractedCalendar;
+
                     if (rowData["企業名"] && rowData["企業名"] !== "企業名" && !rowData["企業名"].includes("対象企業名") && !rowData["企業名"].includes("---")) results.push(rowData);
                 }
             }
@@ -2414,22 +2571,28 @@ const DEFAULT_ACCOUNT_FIELDS = [
 ];
 
 async function loadAccountData() {
+    let loadedCoreValues = "";
     if (auth && auth.currentUser) {
         try {
             const docRef = doc(db, "users", auth.currentUser.uid, "profile", "data");
             const docSnap = await getDoc(docRef);
             if (docSnap.exists()) {
                 accountData = docSnap.data().fields || [];
+                loadedCoreValues = docSnap.data().coreValues || "";
             } else {
                 accountData = JSON.parse(JSON.stringify(DEFAULT_ACCOUNT_FIELDS));
             }
         } catch (e) {
             console.warn("Failed to load account data from Firebase:", e);
             loadLocalAccountData();
+            return;
         }
     } else {
         loadLocalAccountData();
+        return;
     }
+    const cvEl = document.getElementById('account-core-values');
+    if(cvEl) cvEl.value = loadedCoreValues;
     renderAccountFields();
 }
 
@@ -2440,6 +2603,10 @@ function loadLocalAccountData() {
     } else {
         accountData = JSON.parse(JSON.stringify(DEFAULT_ACCOUNT_FIELDS));
     }
+    const localCv = localStorage.getItem('accountCoreValues');
+    const cvEl = document.getElementById('account-core-values');
+    if(cvEl) cvEl.value = localCv || "";
+    renderAccountFields();
 }
 
 function renderAccountFields() {
@@ -2505,15 +2672,18 @@ if (saveAccountBtn) {
         
         saveAccountBtn.textContent = '保存中...';
         
+        const coreValuesText = document.getElementById('account-core-values').value;
         if (auth && auth.currentUser) {
             try {
-                await setDoc(doc(db, "users", auth.currentUser.uid, "profile", "data"), { fields: accountData });
+                await setDoc(doc(db, "users", auth.currentUser.uid, "profile", "data"), { fields: accountData, coreValues: coreValuesText });
             } catch (e) {
                 console.warn("Failed to save to Firebase:", e);
                 localStorage.setItem('accountData', JSON.stringify(accountData));
+                localStorage.setItem('accountCoreValues', coreValuesText);
             }
         } else {
             localStorage.setItem('accountData', JSON.stringify(accountData));
+            localStorage.setItem('accountCoreValues', coreValuesText);
         }
         
         saveAccountBtn.textContent = '保存しました！';
