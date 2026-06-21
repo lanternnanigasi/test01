@@ -462,8 +462,10 @@ function listenToImportQueue() {
                             item.createdAt = new Date().toISOString();
                             item.isHidden = false;
                             item.memo = item._parsedMemo || "";
+                            item.resume = item._parsedResume || "";
                             item.customEvents = item._parsedCalendar || [];
                             delete item._parsedMemo;
+                            delete item._parsedResume;
                             delete item._parsedCalendar;
                             await addDoc(colRef, item);
                         }
@@ -650,25 +652,51 @@ function renderFormatArchives() {
         const label = document.createElement('div');
         if (typeof arch === "string") {
             label.textContent = `[テキスト履歴] ${arch.substring(0, 30)}...`;
+        } else if (arch.type === "profile") {
+            label.textContent = `[全体設計図] ${arch.name}`;
         } else {
-            label.textContent = `[設計図] ${arch.name}`;
+            label.textContent = `[項目] ${arch.name}`;
         }
         
         const btnGroup = document.createElement('div');
         btnGroup.style.display = 'flex';
         btnGroup.style.gap = '8px';
 
-        const useBtn = document.createElement('button');
-        useBtn.className = 'btn secondary';
-        useBtn.textContent = '使う';
-        useBtn.onclick = () => {
-            if (typeof arch === "string") {
-                document.getElementById('format-output').value = arch;
-            } else if (arch.type === "profile") {
-                formatBuilderData = JSON.parse(JSON.stringify(arch.data));
+        const overwriteBtn = document.createElement('button');
+        overwriteBtn.className = 'btn secondary';
+        overwriteBtn.textContent = '上書き';
+        overwriteBtn.style.color = 'var(--danger)';
+        overwriteBtn.onclick = () => {
+            if (confirm("現在のフォーマットをすべて消去して上書きしますか？")) {
+                if (typeof arch === "string") {
+                    document.getElementById('format-output').value = arch;
+                } else if (arch.type === "profile") {
+                    formatBuilderData = JSON.parse(JSON.stringify(arch.data));
+                } else {
+                    formatBuilderData = [JSON.parse(JSON.stringify(arch))];
+                }
                 saveFormatBuilderDataAsync();
                 renderFormatBuilder();
+                document.getElementById('format-archive-modal').style.display = 'none';
             }
+        };
+
+        const appendBtn = document.createElement('button');
+        appendBtn.className = 'btn primary';
+        appendBtn.textContent = '追加';
+        appendBtn.onclick = () => {
+            if (typeof arch === "string") {
+                document.getElementById('format-output').value += '\n' + arch;
+            } else if (arch.type === "profile") {
+                const newData = JSON.parse(JSON.stringify(arch.data));
+                newData.forEach(d => { d.id = Date.now() + Math.random(); formatBuilderData.push(d); });
+            } else {
+                const newObj = JSON.parse(JSON.stringify(arch));
+                newObj.id = Date.now() + Math.random();
+                formatBuilderData.push(newObj);
+            }
+            saveFormatBuilderDataAsync();
+            renderFormatBuilder();
             document.getElementById('format-archive-modal').style.display = 'none';
         };
 
@@ -683,7 +711,8 @@ function renderFormatArchives() {
             }
         };
 
-        btnGroup.appendChild(useBtn);
+        btnGroup.appendChild(appendBtn);
+        btnGroup.appendChild(overwriteBtn);
         btnGroup.appendChild(delBtn);
         div.appendChild(label);
         div.appendChild(btnGroup);
@@ -1172,8 +1201,11 @@ generateFormatBtn.addEventListener('click', async () => {
     
     const validAccountData = accountData.filter(a => a.title && a.value && a.value.trim() !== "");
     
+    const globalEsToggle = document.getElementById('global-es-toggle');
+    const isEsEnabled = globalEsToggle && globalEsToggle.checked;
+    
     if (coreValuesText || validAccountData.length > 0) {
-        prompt += `【ユーザーの基本情報・就活の軸】\n以下の情報を参考に、企業ごとにパーソナライズした調査やリライトを行ってください。\n\n`;
+        prompt += `【ユーザーの基本情報・就活の軸】\n以下の情報を参考に、企業ごとにパーソナライズした調査を行ってください。\n\n`;
         if (coreValuesText) {
             prompt += `- 就活の軸 (絶対に譲れないこと等):\n${coreValuesText}\n\n`;
         }
@@ -1209,12 +1241,20 @@ generateFormatBtn.addEventListener('click', async () => {
                     prompt += `  (ルール: 「${attr.condition}」に該当する場合は、セルの末尾に <!-- calendar_${attr.eventType}: ${attr.dateRule} --> と記載してください。※必ずこのHTMLコメント形式を使うこと)\n`;
                 } else if (attr.type === "memo") {
                     prompt += `  (ルール: 「${attr.condition}」に該当する場合は、調べて要約した内容をセルの末尾に <!-- memo_${attr.memoTitle}: (内容) --> と記載してください。※長文の場合、改行は必ず「<br>」を使い、文中には絶対に「/」を含めないこと)\n`;
-                } else if (attr.type === "rewrite") {
-                    prompt += `  (ルール: ユーザーの「${attr.targetField}」をこの企業の特性に合わせてリライトし、セルの末尾に <!-- memo_${attr.targetField}最適化: (内容) --> と記載してください。※${attr.charLimit ? `文字数制限: ${attr.charLimit}。` : ''}改行は必ず「<br>」を使い、文中には絶対に「/」を含めないこと)\n`;
                 }
             });
         }
     });
+
+    if (isEsEnabled) {
+        const resumeFields = accountData.filter(a => a.useForResume && a.title && a.value && a.value.trim() !== "");
+        if (resumeFields.length > 0) {
+            prompt += `\n【特別指示：ES・履歴書自動作成】\n`;
+            prompt += `この企業の求める人物像や特徴と、ユーザーの基本情報（就活の軸や自己PRなど）を結びつけて、この企業専用のES・履歴書案（志望動機と自己PR）を作成してください。\n`;
+            prompt += `作成したES・履歴書の内容は、各企業の最終項目のセルの末尾に必ず以下の形式で追記してください。\n`;
+            prompt += `<!-- resume: (作成した履歴書・ESの内容。改行は「<br>」を使用し、文中には「/」を絶対に含まないこと) -->\n`;
+        }
+    }
 
     // 中間
     prompt += `\n人間が見やすい表などの出力ではなく、純粋なデータ行のみを出力せよ。\n\n`;
@@ -1277,6 +1317,7 @@ function parseMarkdownTable(markdown) {
                     const rowData = {};
                     let extractedMemo = "";
                     let extractedCalendar = [];
+                    let extractedResume = "";
                     for (let i = 0; i < cells.length; i++) {
                         const header = expectedHeaders[i] || `未設定項目${i}`;
                         let cellText = cells[i];
@@ -1297,10 +1338,18 @@ function parseMarkdownTable(markdown) {
                         }
                         cellText = cellText.replace(/<!-- memo_.*? -->/g, '');
 
+                        const resumeRegex = /<!-- resume:\s*(.*?) -->/g;
+                        let resumeMatch;
+                        while ((resumeMatch = resumeRegex.exec(cellText)) !== null) {
+                            extractedResume += resumeMatch[1].trim().replace(/<br>/g, "\n") + "\n\n";
+                        }
+                        cellText = cellText.replace(/<!-- resume:.*? -->/g, '');
+
                         rowData[header] = cellText.trim();
                     }
                     if (extractedMemo) rowData._parsedMemo = extractedMemo.trim();
                     if (extractedCalendar.length > 0) rowData._parsedCalendar = extractedCalendar;
+                    if (extractedResume) rowData._parsedResume = extractedResume.trim();
 
                     if (rowData["企業名"] && rowData["企業名"] !== "企業名" && !rowData["企業名"].includes("対象企業名") && !rowData["企業名"].includes("---")) results.push(rowData);
                 }
@@ -1388,7 +1437,12 @@ importBtn.addEventListener('click', async () => {
             for (const item of parsedData) {
                 item.createdAt = new Date().toISOString();
                 item.isHidden = false;
-                item.memo = "";
+                item.memo = item._parsedMemo || "";
+                item.resume = item._parsedResume || "";
+                item.customEvents = item._parsedCalendar || [];
+                delete item._parsedMemo;
+                delete item._parsedResume;
+                delete item._parsedCalendar;
                 await addDoc(colRef, item);
             }
         } else {
@@ -1396,7 +1450,12 @@ importBtn.addEventListener('click', async () => {
                 item.id = Date.now() + Math.random().toString(36).substr(2, 9);
                 item.createdAt = new Date().toISOString();
                 item.isHidden = false;
-                item.memo = "";
+                item.memo = item._parsedMemo || "";
+                item.resume = item._parsedResume || "";
+                item.customEvents = item._parsedCalendar || [];
+                delete item._parsedMemo;
+                delete item._parsedResume;
+                delete item._parsedCalendar;
                 mockData.push(item);
             });
             localStorage.setItem('mockData', JSON.stringify(mockData));
@@ -2469,14 +2528,30 @@ function renderNotesSidebar() {
     list.innerHTML = "";
     if (!item) return;
     
-    const notes = (item._meta && item._meta.notes) ? item._meta.notes : [];
+    // Special Notes from AI extraction
+    const specialNotes = [];
+    if (item.memo !== undefined) {
+        specialNotes.push({ id: 'special_memo', title: '💬 AI抽出メモ', content: item.memo, isSpecial: true, key: 'memo' });
+    } else {
+        // Fallback for older data
+        specialNotes.push({ id: 'special_memo', title: '💬 AI抽出メモ', content: "", isSpecial: true, key: 'memo' });
+    }
     
-    if (notes.length === 0) {
+    if (item.resume !== undefined) {
+        specialNotes.push({ id: 'special_resume', title: '📄 ES・履歴書', content: item.resume, isSpecial: true, key: 'resume' });
+    } else {
+        specialNotes.push({ id: 'special_resume', title: '📄 ES・履歴書', content: "", isSpecial: true, key: 'resume' });
+    }
+
+    const customNotes = (item._meta && item._meta.notes) ? item._meta.notes : [];
+    const allNotes = [...specialNotes, ...customNotes];
+    
+    if (allNotes.length === 0) {
         list.innerHTML = "<p style='color:var(--text-color); opacity:0.6; font-size:0.85rem;'>ノートがありません。</p>";
         return;
     }
     
-    notes.forEach((note) => {
+    allNotes.forEach((note) => {
         const btn = document.createElement('button');
         btn.className = 'btn text';
         btn.style.textAlign = 'left';
@@ -2489,6 +2564,9 @@ function renderNotesSidebar() {
         if (currentNoteId === note.id) {
             btn.style.background = 'var(--primary)';
             btn.style.color = '#fff';
+        } else if (note.isSpecial) {
+            btn.style.background = 'rgba(255, 255, 255, 0.1)';
+            btn.style.border = '1px dashed var(--border-color)';
         }
         btn.onclick = () => {
             currentNoteId = note.id;
@@ -2504,6 +2582,19 @@ function showNoteEditor(note) {
     const emptyState = document.getElementById('note-empty-state');
     const titleInput = document.getElementById('note-edit-title');
     const contentInput = document.getElementById('note-edit-content');
+    const deleteBtn = document.getElementById('note-delete-btn');
+    
+    // Check for existing copy button
+    let copyBtn = document.getElementById('note-copy-btn');
+    if (!copyBtn) {
+        copyBtn = document.createElement('button');
+        copyBtn.id = 'note-copy-btn';
+        copyBtn.className = 'btn text';
+        copyBtn.textContent = '📋 コピー';
+        copyBtn.style.color = 'var(--text-color)';
+        const btnContainer = deleteBtn.parentElement;
+        btnContainer.insertBefore(copyBtn, deleteBtn.nextSibling);
+    }
     
     if (!note) {
         container.style.display = 'none';
@@ -2516,6 +2607,25 @@ function showNoteEditor(note) {
     
     titleInput.value = note.title || "";
     contentInput.value = note.content || "";
+    
+    if (note.isSpecial) {
+        titleInput.readOnly = true;
+        titleInput.style.opacity = '0.7';
+        deleteBtn.style.display = 'none'; // Cannot delete special notes
+    } else {
+        titleInput.readOnly = false;
+        titleInput.style.opacity = '1';
+        deleteBtn.style.display = 'block';
+    }
+
+    // Update copy button functionality
+    copyBtn.onclick = () => {
+        navigator.clipboard.writeText(contentInput.value).then(() => {
+            const originalText = copyBtn.textContent;
+            copyBtn.textContent = '✅ コピー完了';
+            setTimeout(() => { copyBtn.textContent = originalText; }, 2000);
+        });
+    };
 }
 
 window.createNewNote = function() {
@@ -2542,18 +2652,27 @@ if (noteSaveBtn) {
     noteSaveBtn.addEventListener('click', () => {
         if (!currentNoteId) return;
         const item = mockData.find(d => d.id === currentNoteCompanyId);
-        if (!item || !item._meta || !item._meta.notes) return;
+        if (!item) return;
         
         const titleInput = document.getElementById('note-edit-title');
         const contentInput = document.getElementById('note-edit-content');
         
-        const noteIdx = item._meta.notes.findIndex(n => n.id === currentNoteId);
-        if (noteIdx !== -1) {
-            item._meta.notes[noteIdx].title = titleInput.value.trim();
-            item._meta.notes[noteIdx].content = contentInput.value;
-            saveCurrentNotes(item._meta.notes);
-            renderNotesSidebar(); // reflect title changes
-            alert("ノートを保存しました！");
+        if (currentNoteId === 'special_memo') {
+            updateItemData(currentNoteCompanyId, { memo: contentInput.value });
+            alert("抽出メモを保存しました！");
+        } else if (currentNoteId === 'special_resume') {
+            updateItemData(currentNoteCompanyId, { resume: contentInput.value });
+            alert("ES・履歴書を保存しました！");
+        } else {
+            if (!item._meta || !item._meta.notes) return;
+            const noteIdx = item._meta.notes.findIndex(n => n.id === currentNoteId);
+            if (noteIdx !== -1) {
+                item._meta.notes[noteIdx].title = titleInput.value.trim();
+                item._meta.notes[noteIdx].content = contentInput.value;
+                saveCurrentNotes(item._meta.notes);
+                renderNotesSidebar(); // reflect title changes
+                alert("ノートを保存しました！");
+            }
         }
     });
 }
@@ -2607,17 +2726,17 @@ if (navDbBtn && navAccountBtn) {
 
 let accountData = [];
 const DEFAULT_ACCOUNT_FIELDS = [
-    { title: "志望動機（なぜこの会社・職種なのか）", value: "" },
-    { title: "自己PR（自分の強みやアピールポイント）", value: "" },
-    { title: "将来のキャリアプラン（入社後に挑戦したいこと）", value: "" },
-    { title: "これまでの職務経歴・実績（どのような成果を上げたか）", value: "" },
-    { title: "活かせる経験・スキル・資格", value: "" },
-    { title: "仕事で直面した困難とそれを乗り越えた方法", value: "" },
-    { title: "自分の長所と短所", value: "" },
-    { title: "仕事をする上で大切にしていること・こだわり", value: "" },
-    { title: "趣味・特技", value: "" },
-    { title: "本人希望記入欄（勤務地、職種、給与、勤務時間などの希望）", value: "" },
-    { title: "現在の就職活動の状況・入社可能時期", value: "" }
+    { title: "志望動機（なぜこの会社・職種なのか）", value: "", useForResume: true },
+    { title: "自己PR（自分の強みやアピールポイント）", value: "", useForResume: true },
+    { title: "将来のキャリアプラン（入社後に挑戦したいこと）", value: "", useForResume: true },
+    { title: "これまでの職務経歴・実績（どのような成果を上げたか）", value: "", useForResume: true },
+    { title: "活かせる経験・スキル・資格", value: "", useForResume: true },
+    { title: "仕事で直面した困難とそれを乗り越えた方法", value: "", useForResume: true },
+    { title: "自分の長所と短所", value: "", useForResume: true },
+    { title: "仕事をする上で大切にしていること・こだわり", value: "", useForResume: true },
+    { title: "趣味・特技", value: "", useForResume: false },
+    { title: "本人希望記入欄（勤務地、職種、給与、勤務時間などの希望）", value: "", useForResume: false },
+    { title: "現在の就職活動の状況・入社可能時期", value: "", useForResume: false }
 ];
 
 async function loadAccountData() {
@@ -2667,10 +2786,16 @@ function renderAccountFields() {
     accountData.forEach((field, index) => {
         const itemDiv = document.createElement('div');
         itemDiv.className = 'input-group';
+        const isChecked = field.useForResume !== false ? 'checked' : '';
         itemDiv.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <input type="text" value="${field.title}" class="account-field-title" data-index="${index}" style="font-weight: bold; font-size: 1.1rem; border: none; background: transparent; color: var(--text-color); width: 80%; outline: none;" placeholder="項目のタイトル">
-                <button class="btn text account-field-delete-btn" data-index="${index}" style="color: var(--danger); padding: 4px;">✕ 削除</button>
+                <input type="text" value="${field.title}" class="account-field-title" data-index="${index}" style="font-weight: bold; font-size: 1.1rem; border: none; background: transparent; color: var(--text-color); width: 60%; outline: none;" placeholder="項目のタイトル">
+                <div style="display: flex; gap: 16px; align-items: center;">
+                    <label style="font-size: 0.85rem; color: var(--primary); cursor: pointer;">
+                        <input type="checkbox" class="account-field-use-for-resume" data-index="${index}" ${isChecked}> ES・履歴書に利用する
+                    </label>
+                    <button class="btn text account-field-delete-btn" data-index="${index}" style="color: var(--danger); padding: 4px;">✕ 削除</button>
+                </div>
             </div>
             <textarea class="account-field-value" data-index="${index}" rows="4" placeholder="内容を入力..." style="width: 100%; border-radius: 8px; border: 1px solid var(--border-color); padding: 12px; background: rgba(255, 255, 255, 0.5);">${field.value}</textarea>
         `;
@@ -2687,6 +2812,12 @@ function renderAccountFields() {
         textarea.addEventListener('change', (e) => {
             const idx = parseInt(e.target.dataset.index);
             accountData[idx].value = e.target.value;
+        });
+    });
+    document.querySelectorAll('.account-field-use-for-resume').forEach(checkbox => {
+        checkbox.addEventListener('change', (e) => {
+            const idx = parseInt(e.target.dataset.index);
+            accountData[idx].useForResume = e.target.checked;
         });
     });
     document.querySelectorAll('.account-field-delete-btn').forEach(btn => {
@@ -2718,6 +2849,10 @@ if (saveAccountBtn) {
         document.querySelectorAll('.account-field-value').forEach(textarea => {
             const idx = parseInt(textarea.dataset.index);
             accountData[idx].value = textarea.value;
+        });
+        document.querySelectorAll('.account-field-use-for-resume').forEach(checkbox => {
+            const idx = parseInt(checkbox.dataset.index);
+            accountData[idx].useForResume = checkbox.checked;
         });
         
         saveAccountBtn.textContent = '保存中...';

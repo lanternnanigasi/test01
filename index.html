@@ -39,7 +39,7 @@
     <!-- Main Dashboard -->
     <div id="main-screen" class="screen">
         <nav class="navbar">
-            <div class="logo">就活メモ</div>
+            <div class="logo">就活メモ <span style="font-size: 0.8rem; font-weight: normal; opacity: 0.7; margin-left: 8px; padding: 2px 6px; background: rgba(255,255,255,0.1); border-radius: 4px;">v1.1.0</span></div>
             <div style="display: flex; gap: 16px; margin: 0 auto; padding-left: 24px;">
                 <button id="nav-db-btn" class="btn text" style="font-weight: bold; background: rgba(255,255,255,0.1);">📚 企業リスト</button>
                 <button id="nav-account-btn" class="btn text">👤 アカウント・自己PR</button>
@@ -83,7 +83,12 @@
                             <input type="text" id="format-save-name" placeholder="フォーマット名" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color); font-size: 0.9rem; background: rgba(255, 255, 255, 0.5); width: 150px;">
                             <button id="save-format-to-archive-btn" class="btn secondary">設計図を保存</button>
                         </div>
-                        <button id="generate-format-btn" class="btn primary">フォーマット生成</button>
+                        <div style="display: flex; align-items: center; gap: 16px;">
+                            <label style="font-size: 0.9rem; font-weight: bold; color: var(--primary); cursor: pointer; display: flex; align-items: center; gap: 4px; padding: 6px 12px; background: rgba(0, 122, 255, 0.1); border-radius: 8px;">
+                                <input type="checkbox" id="global-es-toggle" checked> 履歴書・ESも自動作成する
+                            </label>
+                            <button id="generate-format-btn" class="btn primary">フォーマット生成</button>
+                        </div>
                     </div>
                 </div>
                 <div style="position: relative;">
