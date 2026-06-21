@@ -445,12 +445,47 @@ function getCalendarEvents() {
     return events;
 }
 
-// --- Auth Logic ---
+let importQueueUnsubscribe = null;
+
+function listenToImportQueue() {
+    if (!auth || !auth.currentUser) return;
+    const qRef = collection(db, "users", auth.currentUser.uid, "importQueue");
+    importQueueUnsubscribe = onSnapshot(qRef, async (snapshot) => {
+        snapshot.docChanges().forEach(async (change) => {
+            if (change.type === "added") {
+                const docData = change.doc.data();
+                if (docData.status === "pending" && docData.rawText) {
+                    try {
+                        const parsedData = parseMarkdownTable(docData.rawText);
+                        const colRef = collection(db, "users", auth.currentUser.uid, "companies");
+                        for (const item of parsedData) {
+                            item.createdAt = new Date().toISOString();
+                            item.isHidden = false;
+                            item.memo = item._parsedMemo || "";
+                            item.customEvents = item._parsedCalendar || [];
+                            delete item._parsedMemo;
+                            delete item._parsedCalendar;
+                            await addDoc(colRef, item);
+                        }
+                        
+                        await deleteDoc(doc(db, "users", auth.currentUser.uid, "importQueue", change.doc.id));
+                        alert("Makeからの自動連携データを新しく取り込みました！");
+                    } catch (e) {
+                        console.error("Failed to parse import queue item:", e);
+                        await updateDoc(doc(db, "users", auth.currentUser.uid, "importQueue", change.doc.id), { status: "error", error: e.message });
+                    }
+                }
+            }
+        });
+    });
+}
+
 function updateUI() {
     if ((auth && auth.currentUser) || mockUser) {
         authScreen.classList.remove('active');
         mainScreen.classList.add('active');
         loadData();
+        listenToImportQueue();
     } else {
         authScreen.classList.add('active');
         mainScreen.classList.remove('active');
@@ -458,12 +493,16 @@ function updateUI() {
             unsubscribeSnapshot();
             unsubscribeSnapshot = null;
         }
+        if (importQueueUnsubscribe) {
+            importQueueUnsubscribe();
+            importQueueUnsubscribe = null;
+        }
     }
 }
 
 if (auth) {
     onAuthStateChanged(auth, async (user) => {
-        if (user) alert("あなたのUID: " + user.uid); // ★この行を追加
+        //if (user) alert("あなたのUID: " + user.uid); // ★この行を追加
         await loadSettings();
         updateUI();
     });
