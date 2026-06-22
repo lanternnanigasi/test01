@@ -1949,7 +1949,7 @@ function renderTable(data) {
         return;
     }
 
-    const ignoreHeaders = ['id', 'createdAt', 'userId', '会社名', '企業名', 'isHidden', 'memo', '_meta', '項目', '調査結果', '内容'];
+    const ignoreHeaders = ['id', 'createdAt', 'userId', '会社名', '企業名', 'isHidden', 'memo', 'resume', 'customEvents', '_meta', '項目', '調査結果', '内容'];
     const headerSet = new Set();
     tableData.forEach(item => {
         Object.keys(item).forEach(k => {
@@ -2093,7 +2093,7 @@ function renderTable(data) {
                     td.style.display = 'none';
                 }
 
-                let text = item[h] || "-";
+                let text = String(item[h] || "-");
                 
                 let bgColorClass = "";
                 if (text.includes("<!-- color:green -->")) bgColorClass = "bg-green";
