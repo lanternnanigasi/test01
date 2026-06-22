@@ -1911,6 +1911,20 @@ function renderTable(data) {
     const dynamicHeaders = Array.from(headerSet);
     const headers = [companyKey, ...dynamicHeaders, "アクション"];
 
+    const thSelectAll = document.createElement('th');
+    const cbAll = document.createElement('input');
+    cbAll.type = 'checkbox';
+    cbAll.id = 'merge-select-all';
+    cbAll.title = '全選択/全解除';
+    thSelectAll.appendChild(cbAll);
+    thSelectAll.style.width = "40px";
+    thSelectAll.style.textAlign = "center";
+    cbAll.addEventListener('change', (e) => {
+        const cbs = document.querySelectorAll('.merge-checkbox');
+        cbs.forEach(cb => cb.checked = e.target.checked);
+    });
+    tableHead.appendChild(thSelectAll);
+
     headers.forEach(h => {
         const th = document.createElement('th');
         th.textContent = h;
@@ -2892,3 +2906,27 @@ if (mergeKeepOldBtn) mergeKeepOldBtn.addEventListener('click', () => executeMerg
 
 const mergeConcatBtn = document.getElementById('merge-concat-btn');
 if (mergeConcatBtn) mergeConcatBtn.addEventListener('click', () => executeMerge('concat'));
+
+const bulkDeleteBtn = document.getElementById('bulk-delete-btn');
+if (bulkDeleteBtn) {
+    bulkDeleteBtn.addEventListener('click', async function() {
+        const cbs = document.querySelectorAll('.merge-checkbox:checked');
+        if (cbs.length === 0) {
+            alert("削除する行をチェックしてください。");
+            return;
+        }
+        if (!confirm("チェックされた " + cbs.length + " 件のデータを一括削除します。本当によろしいですか？\nこの操作は元に戻せません。")) {
+            return;
+        }
+        if (!auth || !auth.currentUser) return;
+        try {
+            const promises = [];
+            cbs.forEach(cb => {
+                promises.push(deleteDoc(doc(db, "users", auth.currentUser.uid, "companies", cb.value)));
+            });
+            await Promise.all(promises);
+        } catch (e) {
+            alert("一括削除中にエラーが発生しました: " + e.message);
+        }
+    });
+}
