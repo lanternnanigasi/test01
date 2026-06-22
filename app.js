@@ -1911,17 +1911,6 @@ function renderTable(data) {
     const dynamicHeaders = Array.from(headerSet);
     const headers = [companyKey, ...dynamicHeaders, "アクション"];
 
-    const thSelectAll = document.createElement('th');
-    thSelectAll.innerHTML = `<input type="checkbox" id="merge-select-all" title="全選択/全解除">`;
-    thSelectAll.style.width = "40px";
-    thSelectAll.style.textAlign = "center";
-    const selectAllCb = thSelectAll.querySelector('input');
-    selectAllCb.addEventListener('change', (e) => {
-        const cbs = document.querySelectorAll('.merge-checkbox');
-        cbs.forEach(cb => cb.checked = e.target.checked);
-    });
-    tableHead.appendChild(thSelectAll);
-
     headers.forEach(h => {
         const th = document.createElement('th');
         th.textContent = h;
@@ -2903,23 +2892,3 @@ if (mergeKeepOldBtn) mergeKeepOldBtn.addEventListener('click', () => executeMerg
 
 const mergeConcatBtn = document.getElementById('merge-concat-btn');
 if (mergeConcatBtn) mergeConcatBtn.addEventListener('click', () => executeMerge('concat'));
-
-const bulkDeleteBtn = document.getElementById('bulk-delete-btn');
-if (bulkDeleteBtn) bulkDeleteBtn.addEventListener('click', async () => {
-    const cbs = document.querySelectorAll('.merge-checkbox:checked');
-    if (cbs.length === 0) {
-        alert("削除する行をチェックしてください。");
-        return;
-    }
-    if (!confirm(`チェックされた ${cbs.length} 件のデータを一括削除します。本当によろしいですか？\nこの操作は元に戻せません。`)) {
-        return;
-    }
-    if (!auth || !auth.currentUser) return;
-    try {
-        const promises = Array.from(cbs).map(cb => deleteDoc(doc(db, "users", auth.currentUser.uid, "companies", cb.value)));
-        await Promise.all(promises);
-        // Table will automatically re-render via onSnapshot
-    } catch (e) {
-        alert("一括削除中にエラーが発生しました: " + e.message);
-    }
-});
