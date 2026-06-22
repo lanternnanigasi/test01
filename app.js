@@ -1301,62 +1301,6 @@ function parseMarkdownTable(markdown) {
     }
     
     if (separatorIndex <= 0) {
-        // ヘッダーや区切り行が見つからない場合のフォールバック（AIが//区切りのデータのみ出力した場合）
-        if (markdown.includes('/')) {
-            const validItems = formatBuilderData.filter(d => d.name.trim() !== "");
-            const expectedHeaders = ["企業名", ...validItems.map(d => d.name)];
-            
-            const results = [];
-            // // または改行でレコードを分割
-            const rows = markdown.split(/\/\/|\n/g);
-            for (let row of rows) {
-                if (row.trim() === '') continue;
-                // 各行を / で分割
-                const cells = row.split('/').map(c => c.replace(/\*\*/g, '').trim()).filter(c => c);
-                if (cells.length > 0) {
-                    const rowData = {};
-                    let extractedMemo = "";
-                    let extractedCalendar = [];
-                    let extractedResume = "";
-                    for (let i = 0; i < cells.length; i++) {
-                        const header = expectedHeaders[i] || `未設定項目${i}`;
-                        let cellText = cells[i];
-
-                        const calRegex = /<!-- calendar_(.*?):\s*(.*?) -->/g;
-                        let calMatch;
-                        while ((calMatch = calRegex.exec(cellText)) !== null) {
-                            extractedCalendar.push({ type: calMatch[1].trim(), date: calMatch[2].trim() });
-                        }
-                        cellText = cellText.replace(/<!-- calendar_.*? -->/g, '');
-
-                        const memoRegex = /<!-- memo_(.*?):\s*(.*?) -->/g;
-                        let memoMatch;
-                        while ((memoMatch = memoRegex.exec(cellText)) !== null) {
-                            const title = memoMatch[1].trim();
-                            const content = memoMatch[2].trim().replace(/<br>/g, "\n");
-                            extractedMemo += `### ${title}\n${content}\n\n`;
-                        }
-                        cellText = cellText.replace(/<!-- memo_.*? -->/g, '');
-
-                        const resumeRegex = /<!-- resume:\s*(.*?) -->/g;
-                        let resumeMatch;
-                        while ((resumeMatch = resumeRegex.exec(cellText)) !== null) {
-                            extractedResume += resumeMatch[1].trim().replace(/<br>/g, "\n") + "\n\n";
-                        }
-                        cellText = cellText.replace(/<!-- resume:.*? -->/g, '');
-
-                        rowData[header] = cellText.trim();
-                    }
-                    if (extractedMemo) rowData._parsedMemo = extractedMemo.trim();
-                    if (extractedCalendar.length > 0) rowData._parsedCalendar = extractedCalendar;
-                    if (extractedResume) rowData._parsedResume = extractedResume.trim();
-
-                    if (rowData["企業名"] && rowData["企業名"] !== "企業名" && !rowData["企業名"].includes("対象企業名") && !rowData["企業名"].includes("---")) results.push(rowData);
-                }
-            }
-            if (results.length > 0) return results;
-        }
-        
         throw new Error("フォーマットのヘッダー行、または区切り行（/---/ 等）が見つかりません。AIがフォーマットを省略してデータから出力しています。「ヘッダーを省略しない」ようAIに指示してください。");
     }
 
