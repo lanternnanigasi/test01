@@ -59,7 +59,7 @@ const calendarSection = document.getElementById('calendar-section');
 const calendarEl = document.getElementById('calendar');
 
 // Version Check
-console.log("【就活メモ】 アプリバージョン: v1.5.1 (2026-06-25 一括削除機能・安定版)");
+console.log("【就活メモ】 アプリバージョン: v1.5.2 (2026-06-25 ヘッダーレスパース対応)");
 
 // State
 let isSignupMode = false;
@@ -1301,6 +1301,43 @@ function parseMarkdownTable(markdown) {
     }
     
     if (separatorIndex <= 0) {
+        // Fallback: AI might have omitted headers and dividers.
+        // We will assume lines starting with '/' or '|' are data lines, 
+        // and map them based on the current formatBuilderData headers.
+        const data = [];
+        const validItems = formatBuilderData.filter(d => d && d.name && d.name.trim() !== "");
+        const fallbackHeaders = ["企業名", ...validItems.map(d => d.name)];
+        
+        for (let i = 0; i < lines.length; i++) {
+            let line = lines[i].trim();
+            const delim = line.startsWith('/') ? '/' : (line.startsWith('|') ? '|' : null);
+            if (!delim) continue;
+            
+            const escapeRegex = (s) => s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+            const escapedDelim = escapeRegex(delim);
+            const stripRegex = new RegExp(`^${escapedDelim}|${escapedDelim}$`, 'g');
+            
+            const cleanLine = line.replace(stripRegex, '');
+            const cells = cleanLine.split(delim).map(c => c.replace(/\*\*/g, '').trim());
+            
+            // Must have at least company name and another cell
+            if (cells.length > 1 && cells[0] !== "") {
+                const rowData = {};
+                fallbackHeaders.forEach((header, index) => {
+                    const cleanH = header.trim();
+                    if (!cleanH || /^[-:\s]+$/.test(cleanH) || ['項目', '調査結果', '内容'].includes(cleanH)) {
+                        return;
+                    }
+                    rowData[cleanH] = cells[index] || "";
+                });
+                data.push(rowData);
+            }
+        }
+        
+        if (data.length > 0) {
+            return data;
+        }
+
         throw new Error("フォーマットのヘッダー行、または区切り行（/---/ 等）が見つかりません。AIがフォーマットを省略してデータから出力しています。「ヘッダーを省略しない」ようAIに指示してください。");
     }
 
