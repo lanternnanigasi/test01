@@ -282,10 +282,9 @@ textarea:focus {
 }
 
 table {
-    width: 100%;
     border-collapse: collapse;
     table-layout: fixed;
-    min-width: 100%;
+    min-width: max-content;
 }
 
 th, td {
@@ -293,9 +292,10 @@ th, td {
     text-align: left;
     border-bottom: 1px solid var(--border-color);
     vertical-align: top;
-    min-width: 150px;
-    max-width: 300px;
+    min-width: 150px; /* 約7〜10文字分の幅を確保 */
+    max-width: 400px;
     color: var(--text-color);
+    word-break: break-word;
 }
 
 th {

@@ -59,7 +59,7 @@ const calendarSection = document.getElementById('calendar-section');
 const calendarEl = document.getElementById('calendar');
 
 // Version Check
-console.log("【就活メモ】 アプリバージョン: v1.5.3 (2026-06-25 アーカイブ保存修正版)");
+console.log("【就活メモ】 アプリバージョン: v1.5.4 (2026-06-25 横スクロール対応版)");
 
 // State
 let isSignupMode = false;
