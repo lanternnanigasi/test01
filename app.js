@@ -59,7 +59,7 @@ const calendarSection = document.getElementById('calendar-section');
 const calendarEl = document.getElementById('calendar');
 
 // Version Check
-console.log("【就活メモ】 アプリバージョン: v1.5.2 (2026-06-25 ヘッダーレスパース対応)");
+console.log("【就活メモ】 アプリバージョン: v1.5.3 (2026-06-25 アーカイブ保存修正版)");
 
 // State
 let isSignupMode = false;
@@ -599,10 +599,10 @@ function saveFormatArchivesAsync() {
         if (auth && auth.currentUser) {
             try {
                 const docRef = doc(db, "users", auth.currentUser.uid, "settings", "formatArchives");
-                await updateDoc(docRef, { data: dataStr }).catch(async () => {
-                    await addDoc(collection(db, "users", auth.currentUser.uid, "settings"), { data: dataStr });
-                });
-            } catch (e) {}
+                await setDoc(docRef, { data: dataStr }, { merge: true });
+            } catch (e) {
+                console.warn("Failed to save formatArchives:", e);
+            }
         }
     }, 1000);
 }
@@ -1095,9 +1095,7 @@ function saveCalendarEventTypes() {
     const dataStr = JSON.stringify(calendarEventTypes);
     if (auth && auth.currentUser) {
         const docRef = doc(db, "users", auth.currentUser.uid, "settings", "calendarEventTypes");
-        updateDoc(docRef, { data: dataStr }).catch(() => {
-            addDoc(collection(db, "users", auth.currentUser.uid, "settings"), { data: dataStr });
-        });
+        setDoc(docRef, { data: dataStr }, { merge: true }).catch(e => console.warn(e));
     } else {
         localStorage.setItem('calendarEventTypes', dataStr);
     }
