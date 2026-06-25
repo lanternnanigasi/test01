@@ -253,6 +253,7 @@ const calendarModalCompleteBtn = document.getElementById('calendar-modal-complet
 const calendarModalJumpBtn = document.getElementById('calendar-modal-jump-btn');
 const calendarModalSaveBtn = document.getElementById('calendar-modal-save-btn');
 const calendarModalInputEndDate = document.getElementById('calendar-modal-input-end-date');
+const calendarModalGcalBtn = document.getElementById('calendar-modal-gcal-btn');
 
 function openCalendarModal(dateStr, title = "", eventId = null, memo = "", type = "面接", endDate = "", isCompleted = false, companyId = null, isCompanyEvent = false) {
     currentEditingEventId = eventId;
@@ -267,6 +268,7 @@ function openCalendarModal(dateStr, title = "", eventId = null, memo = "", type 
     if (calendarModalInputType) calendarModalInputType.value = type;
     if (calendarModalDeleteBtn) calendarModalDeleteBtn.style.display = eventId ? 'block' : 'none';
     if (calendarModalCompleteBtn) calendarModalCompleteBtn.style.display = eventId ? 'block' : 'none';
+    if (calendarModalGcalBtn) calendarModalGcalBtn.style.display = 'block';
     
     if (calendarModalJumpBtn) {
         if (isCompanyEvent && companyId) {
@@ -303,6 +305,37 @@ if (calendarModalCompleteBtn) {
             calendarModalCompleteBtn.dataset.completed = "true";
             calendarModalCompleteBtn.textContent = '元に戻す (未完了)';
         }
+    });
+}
+
+if (calendarModalGcalBtn) {
+    calendarModalGcalBtn.addEventListener('click', () => {
+        const title = calendarModalInputTitle.value.trim() || '無題の予定';
+        const dateStr = calendarModalInputDate.value;
+        const endDateStr = calendarModalInputEndDate ? calendarModalInputEndDate.value : "";
+        const memo = calendarModalInputMemo.value.trim();
+        
+        if (!dateStr) {
+            alert('日付が設定されていません');
+            return;
+        }
+        
+        const formatGCalDate = (d) => d.replace(/-/g, '');
+        const startDate = formatGCalDate(dateStr);
+        let endDate = startDate;
+        
+        if (endDateStr) {
+            const endD = new Date(endDateStr);
+            endD.setDate(endD.getDate() + 1);
+            endDate = endD.toISOString().split('T')[0].replace(/-/g, '');
+        } else {
+            const endD = new Date(dateStr);
+            endD.setDate(endD.getDate() + 1);
+            endDate = endD.toISOString().split('T')[0].replace(/-/g, '');
+        }
+
+        const gcalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${startDate}/${endDate}&details=${encodeURIComponent(memo)}`;
+        window.open(gcalUrl, '_blank');
     });
 }
 
