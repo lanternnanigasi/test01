@@ -1574,7 +1574,7 @@ generateFormatBtn.addEventListener('click', async () => {
     localStorage.setItem('formatBuilderData', dataStr);
     
     // 冒頭
-    let prompt = ``;
+    let prompt = `【システム動作指定（絶対厳守）】\nあなたはユーザーの入力データを特定のフォーマットに変換して出力するシステムです。以下のルールに一つでも違反した場合、データ取り込みが失敗しシステムがクラッシュします。必ず以下の制約を100%遵守して回答を生成してください。\n\n`;
     
     // アカウント情報・就活の軸をプロンプトに追加
     const coreValuesEl = document.getElementById('account-core-values');
@@ -1586,7 +1586,7 @@ generateFormatBtn.addEventListener('click', async () => {
     const isEsEnabled = globalEsToggle && globalEsToggle.checked;
     
     if (coreValuesText || validAccountData.length > 0) {
-        prompt += `【ユーザーの基本情報・就活の軸】\n以下の情報を参考に、企業ごとにパーソナライズした調査を行ってください。\n\n`;
+        prompt += `【ユーザーの基本情報・就活の軸】\n以下の情報を参考に、企業ごとにパーソナライズした調査や添削（リライト）を行ってください。\n\n`;
         if (coreValuesText) {
             prompt += `- 就活の軸 (絶対に譲れないこと等):\n${coreValuesText}\n\n`;
         }
@@ -1595,7 +1595,7 @@ generateFormatBtn.addEventListener('click', async () => {
         });
     }
 
-    prompt += `以下の企業情報を調査・整理し、指定のフォーマットで出力してください。見やすい表形式などのリッチテキスト装飾は【厳禁】です。\n\n■ 抽出項目とルール\n- 企業名\n`;
+    prompt += `【抽出項目と個別ルール】\n以下の項目順に、企業情報を調査・整理してください。各項目のルールはシステム要件につき【必ず】実行してください。\n- 企業名\n`;
 
     let varCount = 1;
     validItems.forEach(item => {
@@ -1608,23 +1608,23 @@ generateFormatBtn.addEventListener('click', async () => {
             item.attributes.forEach(attr => {
                 if (attr.type === "hashtag") {
                     const ruleVal = attr.val ? attr.val : "重要なキーワードには「#IT」「#BtoB」のように";
-                    prompt += `  (ルール: ${ruleVal}ハッシュタグを付けてください)\n`;
+                    prompt += `  [厳守] ${ruleVal}ハッシュタグを付けてください。\n`;
                 } else if (attr.type === "color" && attr.condition) {
-                    prompt += `  (ルール: 「${attr.condition}」に該当する場合は、セルの末尾に <!-- color:${attr.color} --> と記載してください)\n`;
+                    prompt += `  [厳守: 色付け] 「${attr.condition}」に該当する場合、必ずセルの内容の末尾に「 <!-- color:${attr.color} --> 」というHTMLタグを含めてください。\n`;
                 } else if (attr.type === "variable") {
                     const varName = `var_${varCount.toString().padStart(3, '0')}`;
                     const ruleVal = attr.val ? attr.val : "必ず数値や日付のみを抽出し";
-                    prompt += `  (ルール: ${ruleVal}、セルの末尾に <!-- ${varName}: (抽出した値) --> と記載してください)\n`;
+                    prompt += `  [厳守: 変数化] ${ruleVal}、セルの末尾に「 <!-- ${varName}: (抽出した値) --> 」と記載してください。\n`;
                     varCount++;
                 } else if (attr.type === "rule" && attr.val) {
-                    prompt += `  (ルール: ${attr.val})\n`;
+                    prompt += `  [厳守] ${attr.val}\n`;
                 } else if (attr.type === "calendar") {
-                    prompt += `  (ルール: 「${attr.condition}」に該当する場合は、セルの末尾に <!-- calendar_${attr.eventType}: ${attr.dateRule} --> と記載してください。※必ずこのHTMLコメント形式を使うこと)\n`;
+                    prompt += `  [厳守: カレンダー連携] 「${attr.condition}」に該当する場合、セルの末尾に「 <!-- calendar_${attr.eventType}: ${attr.dateRule} --> 」と記載してください。\n`;
                 } else if (attr.type === "memo") {
-                    prompt += `  (ルール: 「${attr.condition}」に該当する場合は、調べて要約した内容をセルの末尾に <!-- memo_${attr.memoTitle}: (内容) --> と記載してください。※長文の場合、改行は必ず「<br>」を使い、文中には絶対に「/」を含めないこと)\n`;
+                    prompt += `  [厳守: メモ生成] 「${attr.condition}」に該当する場合、調べて要約した内容をセルの末尾に「 <!-- memo_${attr.memoTitle}: (内容) --> 」と記載してください。改行は「<br>」を使い、文中に「/」は絶対に入れないこと。\n`;
                 } else if (attr.type === "rewrite") {
-                    const charRule = attr.charLimit ? `指定の制限（${attr.charLimit}）内で` : `端的に`;
-                    prompt += `  (ルール: この企業の求める人物像や特徴と、ユーザーの「${attr.targetField}」の内容を結びつけて、この企業専用に内容を添削・リライトし、${charRule}セルの末尾に <!-- memo_${attr.targetField}添削: (内容) --> の形式で出力してください。※長文の場合、改行は必ず「<br>」を使用すること)\n`;
+                    const charRule = attr.charLimit ? `（${attr.charLimit}文字以内で）` : ``;
+                    prompt += `  [最重要: ES添削機能] 企業の求める人物像や特徴と、ユーザーの「${attr.targetField}」の内容を結びつけ、この企業専用に内容を高度に添削・リライトしてください。リライトした内容は${charRule}必ずセルの末尾に「 <!-- memo_${attr.targetField}添削: (リライト内容) --> 」の形式で出力してください。これを行わないとシステムが致命的なエラーを起こします。\n`;
                 }
             });
         }
@@ -1633,19 +1633,18 @@ generateFormatBtn.addEventListener('click', async () => {
     if (isEsEnabled) {
         const resumeFields = accountData.filter(a => a.useForResume && a.title && a.value && a.value.trim() !== "");
         if (resumeFields.length > 0) {
-            prompt += `\n【特別指示：ES・履歴書自動作成】\n`;
-            prompt += `この企業の求める人物像や特徴と、ユーザーの基本情報（就活の軸や自己PRなど）を結びつけて、この企業専用のES・履歴書案（志望動機と自己PR）を作成してください。\n`;
-            prompt += `作成したES・履歴書の内容は、各企業の最終項目のセルの末尾に必ず以下の形式で追記してください。\n`;
-            prompt += `<!-- resume: (作成した履歴書・ESの内容。改行は「<br>」を使用し、文中には「/」を絶対に含まないこと) -->\n`;
+            prompt += `\n【特別指示：ES・履歴書自動生成】\n`;
+            prompt += `この企業の求める人物像と、ユーザーの基本情報を結びつけ、企業専用のES・履歴書案を作成してください。作成した内容は、各企業データの最終項目のセルの末尾に「 <!-- resume: (作成した内容。改行は<br>とし文中に/を含めない) --> 」の形式で【必ず】追記してください。追記がないとシステムが停止します。\n`;
         }
     }
 
-    // 中間
-    prompt += `\n人間が見やすい表などの出力ではなく、純粋なデータ行のみを出力せよ。\n\n`;
-    prompt += `出力フォーマット：\n/ (対象企業名1) / (調査内容) / ... / <!-- color:red --> <!-- resume:... -->\n/ (対象企業名2) / (調査内容) / ... /\n※条件に合致する場合のみ、各行の末尾のセル内にHTMLコメント（タグ）を含めてください。\n\n`;
-    
     // 末尾
-    prompt += `必ず「/」で情報が区切られたデータ行のみを出力すること。Markdownの表形式(ヘッダー行や---の区切り線)は絶対に生成しないでください。`;
+    prompt += `\n【最終出力フォーマットの厳格な制約】\n`;
+    prompt += `・Markdownの表形式（|---|やヘッダー）は絶対に生成しないでください。システムが破壊されます。\n`;
+    prompt += `・必ず「/」で情報が区切られた1行のデータ行のみを出力してください。\n`;
+    prompt += `・前置き、挨拶、説明などのテキストは一切出力しないでください。\n\n`;
+    prompt += `[出力形式の例]\n/ A株式会社 / IT / (項目内容) / ... / 求める人物像です。 <!-- color:red --> <!-- memo_自己PR添削: ... --> /\n\n`;
+    prompt += `それでは、上記の指示を100%遵守し、データ行のみを出力してください。`;
     
     formatOutput.value = prompt;
 
