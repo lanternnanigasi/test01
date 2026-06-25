@@ -212,22 +212,26 @@ function toggleExcelMode() {
         document.body.style.overflow = '';
     }
 }
-excelModeBtn.addEventListener('click', toggleExcelMode);
+if (excelModeBtn) {
+    excelModeBtn.addEventListener('click', toggleExcelMode);
+}
 
-toggleCalendarBtn.addEventListener('click', () => {
-    if (calendarSection.style.display === 'none') {
-        calendarSection.style.display = 'block';
-        toggleCalendarBtn.textContent = '📅 カレンダーを隠す';
-        if (!calendarInstance) {
-            initCalendar();
+if (toggleCalendarBtn) {
+    toggleCalendarBtn.addEventListener('click', () => {
+        if (calendarSection.style.display === 'none') {
+            calendarSection.style.display = 'block';
+            toggleCalendarBtn.textContent = '📅 カレンダーを隠す';
+            if (!calendarInstance) {
+                initCalendar();
+            } else {
+                calendarInstance.render();
+            }
         } else {
-            calendarInstance.render();
+            calendarSection.style.display = 'none';
+            toggleCalendarBtn.textContent = '📅 カレンダー表示';
         }
-    } else {
-        calendarSection.style.display = 'none';
-        toggleCalendarBtn.textContent = '📅 カレンダー表示';
-    }
-});
+    });
+}
 
 const closeCalendarBtn = document.getElementById('close-calendar-btn');
 if (closeCalendarBtn) {
