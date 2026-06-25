@@ -6,7 +6,7 @@ import {
     onAuthStateChanged
 } from "firebase/auth";
 import { 
-    collection, addDoc, getDocs, getDoc, setDoc, onSnapshot, deleteDoc, doc, updateDoc
+    collection, addDoc, getDocs, getDoc, setDoc, onSnapshot, deleteDoc, doc, updateDoc, writeBatch
 } from "firebase/firestore";
 
 // DOM Elements
@@ -42,6 +42,118 @@ const addFormatItemBtn = document.getElementById('add-format-item-btn');
 const generateFormatBtn = document.getElementById('generate-format-btn');
 const formatOutput = document.getElementById('format-output');
 const copyFormatBtn = document.getElementById('copy-format-btn');
+const cloudSyncBtn = document.getElementById('cloud-sync-btn');
+
+// --- Sync & Tracker State ---
+let hasUnsavedChanges = false;
+let deletedCompanyIds = []; // 削除されたIDをトラッキング
+let deletedCalendarIds = []; // 削除されたカレンダーID
+
+function trackFirebaseUsage(type, count) {
+    if (type === 'read') {
+        let reads = parseInt(localStorage.getItem('firebaseReadCount') || '0', 10);
+        reads += count;
+        localStorage.setItem('firebaseReadCount', reads);
+        console.log(`[Firebase Usage] 🔥 READ +${count} (Total: ${reads})`);
+    } else if (type === 'write') {
+        let writes = parseInt(localStorage.getItem('firebaseWriteCount') || '0', 10);
+        writes += count;
+        localStorage.setItem('firebaseWriteCount', writes);
+        console.log(`[Firebase Usage] ✍️ WRITE +${count} (Total: ${writes})`);
+    }
+}
+
+function markUnsavedChanges() {
+    hasUnsavedChanges = true;
+    if (cloudSyncBtn) {
+        cloudSyncBtn.classList.remove('secondary');
+        cloudSyncBtn.classList.add('primary');
+        cloudSyncBtn.style.background = 'var(--danger)';
+        cloudSyncBtn.style.color = '#fff';
+        cloudSyncBtn.textContent = '☁️ クラウドへ保存 (未保存)';
+    }
+}
+
+function clearUnsavedChanges() {
+    hasUnsavedChanges = false;
+    deletedCompanyIds = []; 
+    deletedCalendarIds = [];
+    mockData.forEach(d => delete d._isDirty); 
+    mockCalendarData.forEach(d => delete d._isDirty);
+    if (cloudSyncBtn) {
+        cloudSyncBtn.classList.remove('primary');
+        cloudSyncBtn.classList.add('secondary');
+        cloudSyncBtn.style.background = '';
+        cloudSyncBtn.style.color = '';
+        cloudSyncBtn.textContent = '☁️ クラウドへ保存';
+    }
+}
+
+if (cloudSyncBtn) {
+    cloudSyncBtn.addEventListener('click', async () => {
+        if (!auth || !auth.currentUser) {
+            alert("クラウド保存はログイン時のみ有効です。");
+            return;
+        }
+        if (!hasUnsavedChanges) {
+            alert("保存する変更がありません。");
+            return;
+        }
+        await syncToCloud();
+    });
+}
+
+function backupCurrentState() {
+    localStorage.setItem('backupData', JSON.stringify(mockData));
+    localStorage.setItem('backupCalendarData', JSON.stringify(mockCalendarData));
+}
+
+function rollbackChanges() {
+    const bData = localStorage.getItem('backupData');
+    if (bData) mockData = JSON.parse(bData);
+    const bCal = localStorage.getItem('backupCalendarData');
+    if (bCal) mockCalendarData = JSON.parse(bCal);
+
+    localStorage.setItem('mockData', JSON.stringify(mockData));
+    localStorage.setItem('mockCalendarData', JSON.stringify(mockCalendarData));
+
+    clearUnsavedChanges();
+
+    const modal = document.getElementById('auto-save-modal');
+    if (modal) modal.style.display = 'none';
+
+    // UIを再描画
+    const dataCopy = [...mockData];
+    processMetaData(dataCopy);
+    currentData = dataCopy;
+    renderQuickTags(currentData);
+    updateCalendarEvents();
+    renderQueryBuilder();
+    applyFiltersAndRender();
+    
+    alert("変更を破棄して以前の状態に戻しました。");
+}
+
+window.addEventListener('beforeunload', (e) => {
+    if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = '変更が保存されていません。このページを離れますか？';
+        
+        // ダイアログ中はJSが停止するため、キャンセルされた直後に発火する
+        setTimeout(() => {
+            const modal = document.getElementById('auto-save-modal');
+            if (modal && hasUnsavedChanges) {
+                modal.style.display = 'flex';
+                syncToCloud();
+            }
+        }, 100);
+    }
+});
+
+const rollbackBtn = document.getElementById('rollback-discard-btn');
+if (rollbackBtn) {
+    rollbackBtn.addEventListener('click', rollbackChanges);
+}
 
 // --- Edit Modal Elements ---
 const editModal = document.getElementById('edit-modal');
@@ -59,7 +171,7 @@ const calendarSection = document.getElementById('calendar-section');
 const calendarEl = document.getElementById('calendar');
 
 // Version Check
-console.log("【就活メモ】 アプリバージョン: v1.6.0 (2026-06-25 UI・パーサー改善版)");
+console.log("【就活メモ】 アプリバージョン: v1.7.0 (2026-06-25 UI/カレンダー強化版)");
 
 // State
 let isSignupMode = false;
@@ -72,6 +184,7 @@ let currentSearchQuery = "";
 let currentData = [];
 let calendarInstance = null;
 let hiddenColumns = [];
+let customColumnSettings = { order: [], widths: {} };
 
 // Hide auth warning if Firebase is configured
 if (auth) {
@@ -126,6 +239,10 @@ if (closeCalendarBtn) {
 
 // --- Calendar Logic ---
 let currentEditingEventId = null;
+let currentCompanyId = null;
+let isCurrentCompanyEvent = false;
+let currentOriginalEventType = null;
+
 const calendarModal = document.getElementById('calendar-edit-modal');
 const calendarModalInputTitle = document.getElementById('calendar-modal-input-title');
 const calendarModalInputType = document.getElementById('calendar-modal-input-type');
@@ -133,11 +250,16 @@ const calendarModalInputDate = document.getElementById('calendar-modal-input-dat
 const calendarModalInputMemo = document.getElementById('calendar-modal-input-memo');
 const calendarModalDeleteBtn = document.getElementById('calendar-modal-delete-btn');
 const calendarModalCompleteBtn = document.getElementById('calendar-modal-complete-btn');
+const calendarModalJumpBtn = document.getElementById('calendar-modal-jump-btn');
 const calendarModalSaveBtn = document.getElementById('calendar-modal-save-btn');
 const calendarModalInputEndDate = document.getElementById('calendar-modal-input-end-date');
 
-function openCalendarModal(dateStr, title = "", eventId = null, memo = "", type = "面接", endDate = "", isCompleted = false) {
+function openCalendarModal(dateStr, title = "", eventId = null, memo = "", type = "面接", endDate = "", isCompleted = false, companyId = null, isCompanyEvent = false) {
     currentEditingEventId = eventId;
+    currentCompanyId = companyId;
+    isCurrentCompanyEvent = isCompanyEvent;
+    currentOriginalEventType = type;
+
     calendarModalInputTitle.value = title;
     calendarModalInputDate.value = dateStr;
     if (calendarModalInputEndDate) calendarModalInputEndDate.value = endDate || "";
@@ -145,6 +267,18 @@ function openCalendarModal(dateStr, title = "", eventId = null, memo = "", type 
     if (calendarModalInputType) calendarModalInputType.value = type;
     if (calendarModalDeleteBtn) calendarModalDeleteBtn.style.display = eventId ? 'block' : 'none';
     if (calendarModalCompleteBtn) calendarModalCompleteBtn.style.display = eventId ? 'block' : 'none';
+    
+    if (calendarModalJumpBtn) {
+        if (isCompanyEvent && companyId) {
+            calendarModalJumpBtn.style.display = 'block';
+            calendarModalJumpBtn.onclick = () => {
+                calendarModal.style.display = 'none';
+                openNotesModal(companyId);
+            };
+        } else {
+            calendarModalJumpBtn.style.display = 'none';
+        }
+    }
     
     // Toggle completed state via button logic
     if (calendarModalCompleteBtn) {
@@ -185,81 +319,101 @@ calendarModalSaveBtn.addEventListener('click', async () => {
         return;
     }
 
-    if (currentEditingEventId) {
-        // Edit existing
-        let found = false;
-        if (auth && auth.currentUser) {
-            try {
-                const docRef = doc(db, "users", auth.currentUser.uid, "calendar", currentEditingEventId);
-                await updateDoc(docRef, { title: title, type: typeVal, memo: memo, date: dateStr, endDate: endDateStr, isCompleted: isCompleted });
-                found = true;
-            } catch (e) {
-                console.warn("Firestore updateDoc failed for calendar event:", e.message);
-                const item = mockCalendarData.find(d => d.id === currentEditingEventId);
-                if (item) {
-                    item.title = title;
-                    item.type = typeVal;
-                    item.memo = memo;
-                    item.date = dateStr;
-                    item.endDate = endDateStr;
-                    item.isCompleted = isCompleted;
-                    found = true;
-                }
-            }
-        } else {
-            const item = mockCalendarData.find(d => d.id === currentEditingEventId);
+    if (currentEditingEventId || isCurrentCompanyEvent) {
+        if (isCurrentCompanyEvent && currentCompanyId) {
+            const item = mockData.find(d => d.id === currentCompanyId);
             if (item) {
-                item.title = title;
-                item.type = typeVal;
-                item.memo = memo;
-                item.date = dateStr;
-                item.endDate = endDateStr;
-                item.isCompleted = isCompleted;
-                localStorage.setItem('mockCalendarData', JSON.stringify(mockCalendarData));
-                found = true;
+                if (currentOriginalEventType === "締切") {
+                    if (!item._meta) item._meta = {};
+                    item._meta.deadline = dateStr;
+                } else {
+                    if (!item.customEvents) item.customEvents = [];
+                    // idがない場合はイベントIDで検索するか、typeとdateで検索
+                    const targetIdStr = currentEditingEventId ? currentEditingEventId.replace(`${currentCompanyId}_`, '') : '';
+                    let cEv = item.customEvents.find(e => `${e.type}_${e.date}` === targetIdStr);
+                    if (cEv) {
+                        cEv.type = typeVal;
+                        cEv.date = dateStr;
+                    } else {
+                        // 見つからない場合は追加？ あるいは新規作成？
+                        // 新規にセット
+                        item.customEvents.push({
+                            id: Date.now() + Math.random().toString(36).substr(2, 9),
+                            type: typeVal,
+                            date: dateStr,
+                            isCustomEvent: true
+                        });
+                    }
+                }
+                item.memo = memo; // メモも同期する場合
+                updateItemData(currentCompanyId, item);
             }
+            calendarModal.style.display = 'none';
+            return;
         }
-        if (found) loadData();
+
+        // Edit existing standalone calendar event
+        const item = mockCalendarData.find(d => d.id === currentEditingEventId);
+        if (item) {
+            item.title = title;
+            item.type = typeVal;
+            item.memo = memo;
+            item.date = dateStr;
+            item.endDate = endDateStr;
+            item.isCompleted = isCompleted;
+            item._isDirty = true;
+            localStorage.setItem('mockCalendarData', JSON.stringify(mockCalendarData));
+            markUnsavedChanges();
+            updateCalendarEvents();
+        }
     } else {
         // Add new
         const newItem = {
+            id: Date.now() + Math.random().toString(36).substr(2, 9),
             title: title,
             type: typeVal,
             date: dateStr,
             endDate: endDateStr,
             isCompleted: isCompleted,
             createdAt: new Date().toISOString(),
-            memo: memo
+            memo: memo,
+            _isDirty: true
         };
-        
-        if (auth && auth.currentUser) {
-            const docRefNew = await addDoc(collection(db, "users", auth.currentUser.uid, "calendar"), newItem);
-            newItem.id = docRefNew.id;
-        } else {
-            newItem.id = Date.now() + Math.random().toString(36).substr(2, 9);
-            mockCalendarData.push(newItem);
-            localStorage.setItem('mockCalendarData', JSON.stringify(mockCalendarData));
-            loadData();
-        }
+        mockCalendarData.push(newItem);
+        localStorage.setItem('mockCalendarData', JSON.stringify(mockCalendarData));
+        markUnsavedChanges();
+        updateCalendarEvents();
     }
     calendarModal.style.display = 'none';
 });
 
 calendarModalDeleteBtn.addEventListener('click', async () => {
-    if (!currentEditingEventId || !confirm("この予定を削除しますか？")) return;
-    if (auth && auth.currentUser) {
-        try {
-            await deleteDoc(doc(db, "users", auth.currentUser.uid, "calendar", currentEditingEventId));
-        } catch (e) {
-            console.warn("Firestore deleteDoc failed for calendar event:", e.message);
-            mockCalendarData = mockCalendarData.filter(d => d.id !== currentEditingEventId);
-            loadData();
+    if (!currentEditingEventId && !isCurrentCompanyEvent) return;
+    if (!confirm("この予定を削除しますか？")) return;
+
+    if (isCurrentCompanyEvent && currentCompanyId) {
+        const item = mockData.find(d => d.id === currentCompanyId);
+        if (item) {
+            if (currentOriginalEventType === "締切") {
+                if (item._meta) item._meta.deadline = "";
+            } else {
+                if (item.customEvents) {
+                    const targetIdStr = currentEditingEventId ? currentEditingEventId.replace(`${currentCompanyId}_`, '') : '';
+                    item.customEvents = item.customEvents.filter(e => `${e.type}_${e.date}` !== targetIdStr);
+                }
+            }
+            updateItemData(currentCompanyId, item);
         }
-    } else {
-        mockCalendarData = mockCalendarData.filter(d => d.id !== currentEditingEventId);
-        localStorage.setItem('mockCalendarData', JSON.stringify(mockCalendarData));
-        loadData();
+        calendarModal.style.display = 'none';
+        return;
     }
+
+    mockCalendarData = mockCalendarData.filter(d => d.id !== currentEditingEventId);
+    deletedCalendarIds.push(currentEditingEventId);
+    localStorage.setItem('mockCalendarData', JSON.stringify(mockCalendarData));
+    markUnsavedChanges();
+    updateCalendarEvents();
+
     calendarModal.style.display = 'none';
 });
 
@@ -280,17 +434,14 @@ function initCalendar() {
         },
         eventClick: function(info) {
             const ev = info.event;
-            // 企業テーブルの締切日はカレンダーから直接編集不可とする（編集するとカレンダー専用データとして重複してしまうため）
-            if (ev.extendedProps && ev.extendedProps.isCompanyEvent) {
-                alert("企業データの締切日は、下の企業リストの「編集」ボタンから変更してください。");
-                return;
-            }
             const memo = ev.extendedProps.memo || "";
             const rawTitle = ev.extendedProps.rawTitle || ev.title;
             const type = ev.extendedProps.type || "面接";
             const endDate = ev.extendedProps.endDate || "";
             const isCompleted = ev.extendedProps.isCompleted || false;
-            openCalendarModal(ev.startStr, rawTitle, ev.id, memo, type, endDate, isCompleted);
+            const isCompanyEvent = ev.extendedProps.isCompanyEvent || false;
+            const companyId = ev.extendedProps.companyId || null;
+            openCalendarModal(ev.startStr, rawTitle, ev.id, memo, type, endDate, isCompleted, companyId, isCompanyEvent);
         }
     });
     calendarInstance.render();
@@ -362,7 +513,8 @@ function getCalendarEvents() {
                     memo: item.memo || "",
                     type: "締切",
                     rawTitle: title,
-                    isCompanyEvent: true
+                    isCompanyEvent: true,
+                    companyId: item.id
                 }
             });
         }
@@ -387,7 +539,8 @@ function getCalendarEvents() {
                         memo: item.memo || "",
                         type: cev.type,
                         rawTitle: title,
-                        isCompanyEvent: true
+                        isCompanyEvent: true,
+                        companyId: item.id
                     }
                 });
             });
@@ -611,6 +764,159 @@ window.openFormatArchiveModal = function() {
     renderFormatArchives();
     document.getElementById('format-archive-modal').style.display = 'flex';
 };
+
+let columnSettingsSaveTimeout;
+function saveColumnSettingsAsync() {
+    clearTimeout(columnSettingsSaveTimeout);
+    columnSettingsSaveTimeout = setTimeout(async () => {
+        const dataStr = JSON.stringify(customColumnSettings);
+        localStorage.setItem('customColumnSettings', dataStr);
+        if (auth && auth.currentUser) {
+            try {
+                const docRef = doc(db, "users", auth.currentUser.uid, "settings", "customColumnSettings");
+                await setDoc(docRef, { data: dataStr }, { merge: true });
+            } catch (e) {
+                console.warn("Failed to save customColumnSettings:", e);
+            }
+        }
+    }, 1000);
+}
+
+window.openViewSettingsModal = function() {
+    renderColumnSettingsList();
+    document.getElementById('view-settings-modal').style.display = 'flex';
+};
+
+function renderColumnSettingsList() {
+    const list = document.getElementById('column-settings-list');
+    if (!list) return;
+    list.innerHTML = '';
+
+    // headersは現在の表示列から取得（非表示設定なども加味したいが、まずは全データ中のユニークな列）
+    const ignoreHeaders = ['id', 'createdAt', 'userId', 'isHidden', 'memo', 'resume', 'customEvents', '_meta', 'アクション'];
+    const headerSet = new Set();
+    currentData.forEach(item => {
+        if (item._meta && item._meta.isCustomEvent) return;
+        Object.keys(item).forEach(k => {
+            const cleanK = k.trim();
+            if (!cleanK || ignoreHeaders.includes(cleanK) || /^[-:\s]+$/.test(cleanK)) return;
+            headerSet.add(cleanK);
+        });
+    });
+
+    let builderHeaders = formatBuilderData
+        .filter(d => d && d.name && d.name.trim() !== "")
+        .map(d => d.name.trim());
+    
+    let activeHeaders = builderHeaders.filter(h => headerSet.has(h));
+    let extraHeaders = Array.from(headerSet).filter(h => !builderHeaders.includes(h));
+    let dynamicHeaders = [...activeHeaders, ...extraHeaders];
+
+    if (customColumnSettings.order && customColumnSettings.order.length > 0) {
+        const sorted = [];
+        customColumnSettings.order.forEach(h => {
+            if (dynamicHeaders.includes(h)) sorted.push(h);
+        });
+        const remaining = dynamicHeaders.filter(h => !sorted.includes(h));
+        dynamicHeaders = [...sorted, ...remaining];
+    }
+
+    dynamicHeaders.forEach((h, index) => {
+        const itemDiv = document.createElement('div');
+        itemDiv.style.display = 'flex';
+        itemDiv.style.alignItems = 'center';
+        itemDiv.style.gap = '8px';
+        itemDiv.style.padding = '4px 8px';
+        itemDiv.style.background = 'var(--bg-alt)';
+        itemDiv.style.border = '1px solid var(--border-color)';
+        itemDiv.style.borderRadius = '4px';
+
+        const upBtn = document.createElement('button');
+        upBtn.innerHTML = '&#9650;';
+        upBtn.className = 'icon-btn';
+        upBtn.style.fontSize = '0.7rem';
+        upBtn.disabled = index === 0;
+        upBtn.onclick = () => {
+            if (index > 0) {
+                const temp = dynamicHeaders[index];
+                dynamicHeaders[index] = dynamicHeaders[index - 1];
+                dynamicHeaders[index - 1] = temp;
+                customColumnSettings.order = dynamicHeaders;
+                saveColumnSettingsAsync();
+                renderTable(currentData);
+                renderColumnSettingsList();
+            }
+        };
+
+        const downBtn = document.createElement('button');
+        downBtn.innerHTML = '&#9660;';
+        downBtn.className = 'icon-btn';
+        downBtn.style.fontSize = '0.7rem';
+        downBtn.disabled = index === dynamicHeaders.length - 1;
+        downBtn.onclick = () => {
+            if (index < dynamicHeaders.length - 1) {
+                const temp = dynamicHeaders[index];
+                dynamicHeaders[index] = dynamicHeaders[index + 1];
+                dynamicHeaders[index + 1] = temp;
+                customColumnSettings.order = dynamicHeaders;
+                saveColumnSettingsAsync();
+                renderTable(currentData);
+                renderColumnSettingsList();
+            }
+        };
+
+        const nameLabel = document.createElement('span');
+        nameLabel.textContent = h;
+        nameLabel.style.flex = "1";
+        nameLabel.style.fontSize = "0.85rem";
+        nameLabel.style.overflow = "hidden";
+        nameLabel.style.textOverflow = "ellipsis";
+        nameLabel.style.whiteSpace = "nowrap";
+
+        const widthInput = document.createElement('input');
+        widthInput.type = 'number';
+        widthInput.className = 'glass-input';
+        widthInput.style.width = '60px';
+        widthInput.style.padding = '2px 4px';
+        widthInput.style.fontSize = '0.85rem';
+        widthInput.placeholder = '自動';
+        widthInput.title = '最小幅(文字数/em)。0を指定すると自動幅計算になります。';
+        widthInput.value = (customColumnSettings.widths && customColumnSettings.widths[h]) ? customColumnSettings.widths[h] : 0;
+        
+        widthInput.addEventListener('change', (e) => {
+            const val = parseInt(e.target.value) || 0;
+            if (!customColumnSettings.widths) customColumnSettings.widths = {};
+            if (val > 0) {
+                customColumnSettings.widths[h] = val;
+            } else {
+                delete customColumnSettings.widths[h];
+            }
+            saveColumnSettingsAsync();
+            renderTable(currentData);
+        });
+
+        itemDiv.appendChild(upBtn);
+        itemDiv.appendChild(downBtn);
+        itemDiv.appendChild(nameLabel);
+        itemDiv.appendChild(widthInput);
+        
+        list.appendChild(itemDiv);
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const resetBtn = document.getElementById('reset-column-settings-btn');
+    if (resetBtn) {
+        resetBtn.addEventListener('click', () => {
+            if (confirm("列の並び順と幅を初期状態（自動計算）にリセットしますか？")) {
+                customColumnSettings = { order: [], widths: {} };
+                saveColumnSettingsAsync();
+                renderTable(currentData);
+                renderColumnSettingsList();
+            }
+        });
+    }
+});
 
 // --- Format Saving logic ---
 const saveFormatToArchiveBtn = document.getElementById('save-format-to-archive-btn');
@@ -1095,6 +1401,9 @@ async function loadSettings() {
                 if (d.id === "formatArchives" && d.data().data) {
                     formatArchives = JSON.parse(d.data().data);
                 }
+                if (d.id === "customColumnSettings" && d.data().data) {
+                    customColumnSettings = JSON.parse(d.data().data);
+                }
             });
         } catch (e) {
             console.error(e);
@@ -1108,6 +1417,9 @@ async function loadSettings() {
 
         const savedArchives = localStorage.getItem('formatArchives');
         if (savedArchives) formatArchives = JSON.parse(savedArchives);
+
+        const savedCols = localStorage.getItem('customColumnSettings');
+        if (savedCols) customColumnSettings = JSON.parse(savedCols);
     }
 
     if (formatBuilderData.length === 0) {
@@ -1273,6 +1585,9 @@ generateFormatBtn.addEventListener('click', async () => {
                     prompt += `  (ルール: 「${attr.condition}」に該当する場合は、セルの末尾に <!-- calendar_${attr.eventType}: ${attr.dateRule} --> と記載してください。※必ずこのHTMLコメント形式を使うこと)\n`;
                 } else if (attr.type === "memo") {
                     prompt += `  (ルール: 「${attr.condition}」に該当する場合は、調べて要約した内容をセルの末尾に <!-- memo_${attr.memoTitle}: (内容) --> と記載してください。※長文の場合、改行は必ず「<br>」を使い、文中には絶対に「/」を含めないこと)\n`;
+                } else if (attr.type === "rewrite") {
+                    const charRule = attr.charLimit ? `指定の制限（${attr.charLimit}）内で` : `端的に`;
+                    prompt += `  (ルール: この企業の求める人物像や特徴と、ユーザーの「${attr.targetField}」の内容を結びつけて、この企業専用に内容を添削・リライトし、${charRule}セルの末尾に <!-- memo_${attr.targetField}添削: (内容) --> の形式で出力してください。※長文の場合、改行は必ず「<br>」を使用すること)\n`;
                 }
             });
         }
@@ -1977,53 +2292,96 @@ function renderQuickTags(data) {
 }
 
 async function updateItemData(id, updates) {
-    // 対象データを取得してカスタムイベントかどうか判定
-    const targetItem = mockData.find(d => d.id === id);
-    const isCustomEvent = targetItem && targetItem._meta && targetItem._meta.isCustomEvent;
-
-    if (auth && auth.currentUser && !isCustomEvent) {
-        try {
-            const docRef = doc(db, "users", auth.currentUser.uid, "companies", id);
-            await updateDoc(docRef, updates);
-        } catch (e) {
-            console.warn("Firestore updateDoc failed, falling back to local update:", e.message);
-            // Firestoreに存在しないドキュメントの場合、ローカルで処理
-            const idx = mockData.findIndex(d => d.id === id);
-            if (idx !== -1) {
-                mockData[idx] = { ...mockData[idx], ...updates };
-            }
-            loadData();
-        }
-    } else {
-        const idx = mockData.findIndex(d => d.id === id);
-        if (idx !== -1) {
-            mockData[idx] = { ...mockData[idx], ...updates };
-            localStorage.setItem('mockData', JSON.stringify(mockData));
-            loadData();
-        }
+    const idx = mockData.findIndex(d => d.id === id);
+    if (idx !== -1) {
+        mockData[idx] = { ...mockData[idx], ...updates, _isDirty: true };
+        localStorage.setItem('mockData', JSON.stringify(mockData));
+        markUnsavedChanges();
+        
+        // Re-render UI immediately
+        renderQueryBuilder();
+        applyFiltersAndRender();
+        updateCalendarEvents();
     }
 }
 
 async function deleteItemData(id) {
     if (confirm("本当にこのデータを削除しますか？この操作は元に戻せません。")) {
-        // 対象データを取得してカスタムイベントかどうか判定
-        const targetItem = mockData.find(d => d.id === id);
-        const isCustomEvent = targetItem && targetItem._meta && targetItem._meta.isCustomEvent;
+        mockData = mockData.filter(d => d.id !== id);
+        deletedCompanyIds.push(id);
+        localStorage.setItem('mockData', JSON.stringify(mockData));
+        markUnsavedChanges();
+        
+        // Re-render UI immediately
+        renderQueryBuilder();
+        applyFiltersAndRender();
+        updateCalendarEvents();
+    }
+}
 
-        if (auth && auth.currentUser && !isCustomEvent) {
-            try {
-                const docRef = doc(db, "users", auth.currentUser.uid, "companies", id);
-                await deleteDoc(docRef);
-            } catch (e) {
-                console.warn("Firestore deleteDoc failed, falling back to local delete:", e.message);
-                // Firestoreに存在しないドキュメントの場合、ローカルで処理
-                mockData = mockData.filter(d => d.id !== id);
-                loadData();
+async function syncToCloud() {
+    if (!auth || !auth.currentUser) return;
+    try {
+        const batch = writeBatch(db);
+        let writeCount = 0;
+        
+        // 1. Handle Deletes
+        for (const id of deletedCompanyIds) {
+            const docRef = doc(db, "users", auth.currentUser.uid, "companies", id);
+            batch.delete(docRef);
+            writeCount++;
+        }
+        for (const id of deletedCalendarIds) {
+            const docRef = doc(db, "users", auth.currentUser.uid, "calendar", id);
+            batch.delete(docRef);
+            writeCount++;
+        }
+        
+        // 2. Handle Updates/Adds
+        for (const item of mockData) {
+            if (item._isDirty) {
+                const docRef = doc(db, "users", auth.currentUser.uid, "companies", item.id);
+                const cleanItem = { ...item };
+                delete cleanItem._isDirty;
+                batch.set(docRef, cleanItem);
+                writeCount++;
             }
+        }
+        for (const item of mockCalendarData) {
+            if (item._isDirty) {
+                const docRef = doc(db, "users", auth.currentUser.uid, "calendar", item.id);
+                const cleanItem = { ...item };
+                delete cleanItem._isDirty;
+                batch.set(docRef, cleanItem);
+                writeCount++;
+            }
+        }
+        
+        if (writeCount > 0) {
+            await batch.commit();
+            trackFirebaseUsage('write', writeCount);
+            console.log(`[Firebase Usage] Successfully synced ${writeCount} items to cloud.`);
+        }
+        
+        clearUnsavedChanges();
+        backupCurrentState();
+        
+        const modal = document.getElementById('auto-save-modal');
+        if (modal) modal.style.display = 'none';
+
+        alert("クラウドへ同期しました。");
+        
+        // 念のため再取得 (同期のズレを防ぐため)
+        await loadData();
+    } catch (e) {
+        const modal = document.getElementById('auto-save-modal');
+        if (modal) modal.style.display = 'none';
+        console.error("Failed to sync to cloud:", e);
+        if (e.message && e.message.includes("quota")) {
+            console.error("[429 Quota Exceeded] Firebaseの無料読み取り/書き込み枠を超過しました。");
+            alert("Firebaseの無料枠を超過しました。明日までクラウドへの保存はできませんが、ローカルでの作業は可能です。");
         } else {
-            mockData = mockData.filter(d => d.id !== id);
-            localStorage.setItem('mockData', JSON.stringify(mockData));
-            loadData();
+            alert("同期中にエラーが発生しました: " + e.message);
         }
     }
 }
@@ -2060,9 +2418,25 @@ function renderTable(data) {
         .filter(d => d && d.name && d.name.trim() !== "")
         .map(d => d.name.trim());
     
+    // データが存在する列のみ抽出
+    const activeBuilderHeaders = builderHeaders.filter(h => headerSet.has(h));
+    
     // 設計図にないヘッダーは末尾に追加
     const extraHeaders = Array.from(headerSet).filter(h => !builderHeaders.includes(h));
-    const dynamicHeaders = [...builderHeaders, ...extraHeaders];
+    let dynamicHeaders = [...activeBuilderHeaders, ...extraHeaders];
+
+    // カスタム並び順設定が有効な場合、それを適用
+    if (customColumnSettings.order && customColumnSettings.order.length > 0) {
+        const sorted = [];
+        customColumnSettings.order.forEach(h => {
+            if (dynamicHeaders.includes(h)) {
+                sorted.push(h);
+            }
+        });
+        const remaining = dynamicHeaders.filter(h => !sorted.includes(h));
+        dynamicHeaders = [...sorted, ...remaining];
+    }
+
     const headers = [companyKey, ...dynamicHeaders, "アクション"];
 
     // 各列の平均文字数を計算し、列幅を決定する
@@ -2088,6 +2462,11 @@ function renderTable(data) {
         let avg = Math.round(totalLen / count);
         // 平均が26文字未満ならその平均値(最小7)、超えれば26文字を基準とする
         columnWidths[h] = Math.max(7, Math.min(26, avg));
+
+        // カスタム横幅設定があれば上書き（0の場合は自動計算を維持）
+        if (customColumnSettings.widths && customColumnSettings.widths[h]) {
+            columnWidths[h] = customColumnSettings.widths[h];
+        }
     });
 
     const thSelectAll = document.createElement('th');
@@ -2274,6 +2653,69 @@ function renderTable(data) {
                 const contentDiv = document.createElement('div');
                 contentDiv.className = 'cell-content';
                 
+                const buildTextWithDates = (str) => {
+                    const frag = document.createDocumentFragment();
+                    const dateRegex = /\d{4}-\d{2}-\d{2}/g;
+                    let lastIndex = 0;
+                    let match;
+                    while ((match = dateRegex.exec(str)) !== null) {
+                        if (match.index > lastIndex) {
+                            frag.appendChild(document.createTextNode(str.substring(lastIndex, match.index)));
+                        }
+                        const dateStr = match[0];
+                        const a = document.createElement('a');
+                        a.className = 'date-link';
+                        a.textContent = dateStr;
+                        // Determine event type
+                        let evType = "面接";
+                        let evId = null;
+                        if (h.includes("締切") || (item._meta && item._meta.deadline === dateStr)) evType = "締切";
+                        if (item.customEvents) {
+                            const cEv = item.customEvents.find(e => e.date === dateStr);
+                            if (cEv) { evType = cEv.type; evId = `${item.id}_${cEv.type}_${cEv.date}`; }
+                        }
+                        const rawTitle = (item[companyKey] || "不明") + " " + evType;
+                        a.onclick = (e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            openCalendarModal(dateStr, rawTitle, evId, item.memo || "", evType, "", false, item.id, true);
+                        };
+                        frag.appendChild(a);
+
+                        // Calculate diff and add badge
+                        const today = new Date();
+                        today.setHours(0,0,0,0);
+                        const targetDate = new Date(dateStr);
+                        targetDate.setHours(0,0,0,0);
+                        const diffTime = targetDate.getTime() - today.getTime();
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                        
+                        if (diffDays >= 0 && diffDays <= 31) {
+                            const badge = document.createElement('span');
+                            badge.className = 'deadline-badge';
+                            if (diffDays === 0) {
+                                badge.classList.add('deadline-urgent');
+                                badge.textContent = '本日';
+                            } else if (diffDays <= 3) {
+                                badge.classList.add('deadline-warning');
+                                badge.textContent = diffDays + '日前';
+                            } else if (diffDays <= 7) {
+                                badge.classList.add('deadline-notice');
+                                badge.textContent = '1週間前';
+                            } else if (diffDays <= 31) {
+                                badge.classList.add('deadline-info');
+                                badge.textContent = '1か月前';
+                            }
+                            frag.appendChild(badge);
+                        }
+                        lastIndex = dateRegex.lastIndex;
+                    }
+                    if (lastIndex < str.length) {
+                        frag.appendChild(document.createTextNode(str.substring(lastIndex)));
+                    }
+                    return frag;
+                };
+                
                 // ブックマーク機能 (企業名の列に配置)
                 if (h === companyKey) {
                     const bookmarkBtn = document.createElement('span');
@@ -2290,11 +2732,11 @@ function renderTable(data) {
                     });
                     
                     const textSpan = document.createElement('span');
-                    textSpan.textContent = text;
+                    textSpan.appendChild(buildTextWithDates(text));
                     contentDiv.appendChild(bookmarkBtn);
                     contentDiv.appendChild(textSpan);
                 } else {
-                    contentDiv.textContent = text;
+                    contentDiv.appendChild(buildTextWithDates(text));
                 }
                 
                 td.appendChild(contentDiv);
@@ -2418,41 +2860,63 @@ function processMetaData(dataList) {
     });
 }
 
-function loadData() {
+async function loadData() {
+    // 1. ローカルキャッシュから即時描画
+    const localData = localStorage.getItem('mockData');
+    if (localData) {
+        mockData = JSON.parse(localData);
+    }
+    const localCal = localStorage.getItem('mockCalendarData');
+    if (localCal) {
+        mockCalendarData = JSON.parse(localCal);
+    }
+
+    // 即時描画
+    const dataCopy = [...mockData];
+    processMetaData(dataCopy);
+    currentData = dataCopy;
+    renderQuickTags(currentData);
+    updateCalendarEvents();
+    renderQueryBuilder(); 
+    applyFiltersAndRender();
+
+    // 2. クラウドから最新を取得して同期
     if (auth && auth.currentUser) {
-        const colRef = collection(db, "users", auth.currentUser.uid, "companies");
-        if (unsubscribeSnapshot) unsubscribeSnapshot();
-        unsubscribeSnapshot = onSnapshot(colRef, (snapshot) => {
-            const data = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
+        try {
+            const colRef = collection(db, "users", auth.currentUser.uid, "companies");
+            const snapshot = await getDocs(colRef);
+            trackFirebaseUsage('read', snapshot.size);
             
-            processMetaData(data);
+            const fetchedData = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
             
-            // Firebaseからロードした場合、mockDataを上書きしておくか、あるいはcurrentDataとして扱う
-            mockData = data; 
-            currentData = data;
+            const calRef = collection(db, "users", auth.currentUser.uid, "calendar");
+            const calSnap = await getDocs(calRef);
+            trackFirebaseUsage('read', calSnap.size);
+            
+            mockCalendarData = calSnap.docs.map(doc => ({id: doc.id, ...doc.data()}));
+            mockData = fetchedData;
+            
+            localStorage.setItem('mockData', JSON.stringify(mockData));
+            localStorage.setItem('mockCalendarData', JSON.stringify(mockCalendarData));
+            
+            // クラウドから取得したデータで再描画
+            const fetchedDataCopy = [...mockData];
+            processMetaData(fetchedDataCopy);
+            currentData = fetchedDataCopy;
             
             renderQuickTags(currentData);
             updateCalendarEvents();
-            renderQueryBuilder(); // フィールド一覧の更新
+            renderQueryBuilder(); 
             applyFiltersAndRender();
-        });
-
-        const calRef = collection(db, "users", auth.currentUser.uid, "calendar");
-        if (unsubscribeCalendarSnapshot) unsubscribeCalendarSnapshot();
-        unsubscribeCalendarSnapshot = onSnapshot(calRef, (snapshot) => {
-            mockCalendarData = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
-            updateCalendarEvents();
-        });
-    } else {
-        mockCalendarData = localStorage.getItem('mockCalendarData') ? JSON.parse(localStorage.getItem('mockCalendarData')) : [];
-        const data = [...mockData];
-        processMetaData(data);
-        currentData = data;
-        
-        renderQuickTags(currentData);
-        updateCalendarEvents();
-        renderQueryBuilder(); // フィールド一覧の更新
-        applyFiltersAndRender();
+            
+            clearUnsavedChanges();
+            backupCurrentState();
+        } catch(e) {
+            console.error("Failed to fetch from cloud:", e);
+            if (e.message && e.message.includes("quota")) {
+                console.error("[429 Quota Exceeded] Firebaseの無料読み取り枠を超過しました。");
+            }
+        }
     }
 }
 
