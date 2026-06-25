@@ -1610,21 +1610,21 @@ generateFormatBtn.addEventListener('click', async () => {
                     const ruleVal = attr.val ? attr.val : "重要なキーワードには「#IT」「#BtoB」のように";
                     prompt += `  [厳守] ${ruleVal}ハッシュタグを付けてください。\n`;
                 } else if (attr.type === "color" && attr.condition) {
-                    prompt += `  [厳守: 色付け] 「${attr.condition}」に該当する場合、必ずセルの内容の末尾に「 <!-- color:${attr.color} --> 」というHTMLタグを含めてください。\n`;
+                    prompt += `  [厳守: 色付け] 「${attr.condition}」に該当する場合、必ずセルの内容の末尾に「 [[color:${attr.color}]] 」というタグを含めてください。※HTMLコメントではなく必ず二重角括弧を使用すること。\n`;
                 } else if (attr.type === "variable") {
                     const varName = `var_${varCount.toString().padStart(3, '0')}`;
                     const ruleVal = attr.val ? attr.val : "必ず数値や日付のみを抽出し";
-                    prompt += `  [厳守: 変数化] ${ruleVal}、セルの末尾に「 <!-- ${varName}: (抽出した値) --> 」と記載してください。\n`;
+                    prompt += `  [厳守: 変数化] ${ruleVal}、セルの末尾に「 [[${varName}: (抽出した値)]] 」と記載してください。\n`;
                     varCount++;
                 } else if (attr.type === "rule" && attr.val) {
                     prompt += `  [厳守] ${attr.val}\n`;
                 } else if (attr.type === "calendar") {
-                    prompt += `  [厳守: カレンダー連携] 「${attr.condition}」に該当する場合、セルの末尾に「 <!-- calendar_${attr.eventType}: ${attr.dateRule} --> 」と記載してください。\n`;
+                    prompt += `  [厳守: カレンダー連携] 「${attr.condition}」に該当する場合、セルの末尾に「 [[calendar_${attr.eventType}: ${attr.dateRule}]] 」と記載してください。\n`;
                 } else if (attr.type === "memo") {
-                    prompt += `  [厳守: メモ生成] 「${attr.condition}」に該当する場合、調べて要約した内容をセルの末尾に「 <!-- memo_${attr.memoTitle}: (内容) --> 」と記載してください。改行は「<br>」を使い、文中に「/」は絶対に入れないこと。\n`;
+                    prompt += `  [厳守: メモ生成] 「${attr.condition}」に該当する場合、調べて要約した内容をセルの末尾に「 [[memo_${attr.memoTitle}: (内容)]] 」と記載してください。改行は「<br>」を使い、文中に「/」は絶対に入れないこと。\n`;
                 } else if (attr.type === "rewrite") {
                     const charRule = attr.charLimit ? `（${attr.charLimit}文字以内で）` : ``;
-                    prompt += `  [最重要: ES添削機能] 企業の求める人物像や特徴と、ユーザーの「${attr.targetField}」の内容を結びつけ、この企業専用に内容を高度に添削・リライトしてください。リライトした内容は${charRule}必ずセルの末尾に「 <!-- memo_${attr.targetField}添削: (リライト内容) --> 」の形式で出力してください。これを行わないとシステムが致命的なエラーを起こします。\n`;
+                    prompt += `  [最重要: ES添削機能] 企業の求める人物像や特徴と、ユーザーの「${attr.targetField}」の内容を結びつけ、この企業専用に内容を高度に添削・リライトしてください。リライトした内容は${charRule}必ずセルの末尾に「 [[memo_${attr.targetField}添削: (リライト内容)]] 」の形式で出力してください。これを行わないとシステムが致命的なエラーを起こします。\n`;
                 }
             });
         }
@@ -1634,7 +1634,7 @@ generateFormatBtn.addEventListener('click', async () => {
         const resumeFields = accountData.filter(a => a.useForResume && a.title && a.value && a.value.trim() !== "");
         if (resumeFields.length > 0) {
             prompt += `\n【特別指示：ES・履歴書自動生成】\n`;
-            prompt += `この企業の求める人物像と、ユーザーの基本情報を結びつけ、企業専用のES・履歴書案を作成してください。作成した内容は、各企業データの最終項目のセルの末尾に「 <!-- resume: (作成した内容。改行は<br>とし文中に/を含めない) --> 」の形式で【必ず】追記してください。追記がないとシステムが停止します。\n`;
+            prompt += `この企業の求める人物像と、ユーザーの基本情報を結びつけ、企業専用のES・履歴書案を作成してください。作成した内容は、各企業データの最終項目のセルの末尾に「 [[resume: (作成した内容。改行は<br>とし文中に/を含めない)]] 」の形式で【必ず】追記してください。追記がないとシステムが停止します。\n`;
         }
     }
 
@@ -1643,7 +1643,7 @@ generateFormatBtn.addEventListener('click', async () => {
     prompt += `・Markdownの表形式（|---|やヘッダー）は絶対に生成しないでください。システムが破壊されます。\n`;
     prompt += `・必ず「/」で情報が区切られた1行のデータ行のみを出力してください。\n`;
     prompt += `・前置き、挨拶、説明などのテキストは一切出力しないでください。\n\n`;
-    prompt += `[出力形式の例]\n/ A株式会社 / IT / (項目内容) / ... / 求める人物像です。 <!-- color:red --> <!-- memo_自己PR添削: ... --> /\n\n`;
+    prompt += `[出力形式の例]\n/ A株式会社 / IT / (項目内容) / ... / 求める人物像です。 [[color:red]] [[memo_自己PR添削: ...]] /\n\n`;
     prompt += `それでは、上記の指示を100%遵守し、データ行のみを出力してください。`;
     
     formatOutput.value = prompt;
@@ -1711,13 +1711,13 @@ function parseMarkdownTable(markdown) {
             cells.forEach((cell, idx) => {
                 let currentCell = cell;
                 
-                const resumeMatch = currentCell.match(/<!--\s*resume:\s*(.*?)\s*-->/);
+                const resumeMatch = currentCell.match(/(?:<!--|\[\[)\s*resume:\s*(.*?)\s*(?:-->|\]\])/);
                 if (resumeMatch) {
                     parsedResume = resumeMatch[1].trim();
                     currentCell = currentCell.replace(resumeMatch[0], "").trim();
                 }
 
-                const memoRegex = /<!--\s*memo_(.*?):\s*(.*?)\s*-->/g;
+                const memoRegex = /(?:<!--|\[\[)\s*memo_(.*?):\s*(.*?)\s*(?:-->|\]\])/g;
                 let m;
                 while ((m = memoRegex.exec(currentCell)) !== null) {
                     if (parsedMemo) parsedMemo += "\n\n";
@@ -1725,7 +1725,7 @@ function parseMarkdownTable(markdown) {
                     currentCell = currentCell.replace(m[0], "").trim();
                 }
 
-                const calRegex = /<!--\s*calendar_(.*?):\s*(.*?)\s*-->/g;
+                const calRegex = /(?:<!--|\[\[)\s*calendar_(.*?):\s*(.*?)\s*(?:-->|\]\])/g;
                 while ((m = calRegex.exec(currentCell)) !== null) {
                     parsedCalendar.push({
                         id: Date.now() + Math.random().toString(36).substr(2, 9),
@@ -2488,7 +2488,7 @@ function renderTable(data) {
 
         tableData.forEach(item => {
             let val = item[h] || "";
-            let text = String(val).replace(/<!--.*?-->/g, "").replace(/\*\*/g, "").trim();
+            let text = String(val).replace(/<!--.*?-->/g, "").replace(/\[\[.*?\]\]/g, "").replace(/\*\*/g, "").trim();
             if (text) {
                 totalLen += text.length;
                 count++;
@@ -2653,12 +2653,12 @@ function renderTable(data) {
                 let text = String(item[h] || "-");
                 
                 let bgColorClass = "";
-                if (text.includes("<!-- color:green -->")) bgColorClass = "bg-green";
-                else if (text.includes("<!-- color:yellow -->")) bgColorClass = "bg-yellow";
-                else if (text.includes("<!-- color:red -->")) bgColorClass = "bg-red";
+                if (text.includes("<!-- color:green -->") || text.includes("[[color:green]]")) bgColorClass = "bg-green";
+                else if (text.includes("<!-- color:yellow -->") || text.includes("[[color:yellow]]")) bgColorClass = "bg-yellow";
+                else if (text.includes("<!-- color:red -->") || text.includes("[[color:red]]")) bgColorClass = "bg-red";
                 
-                text = text.replace(/<!-- color:(.*?) -->/g, "").trim();
-                text = text.replace(/<!-- sort_(.*?):(.*?) -->/g, "").trim();
+                text = text.replace(/<!-- color:(.*?) -->/g, "").replace(/\[\[color:(.*?)\]\]/g, "").trim();
+                text = text.replace(/<!-- sort_(.*?):(.*?) -->/g, "").replace(/\[\[sort_(.*?):(.*?)\]\]/g, "").trim();
 
                 // タグの抽出
                 const tags = [];
@@ -2838,12 +2838,12 @@ function processMetaData(dataList) {
         Object.values(item).forEach(text => {
             if (typeof text === 'string') {
                 allText += text + " ";
-                const regex = /<!-- (?:sort|var)_(.*?):\s*(.*?) -->/g;
+                const regex = /(?:<!--|\[\[)\s*(?:sort|var)_(.*?):\s*(.*?)\s*(?:-->|\]\])/g;
                 let match;
                 while ((match = regex.exec(text)) !== null) {
                     let key = match[1].trim();
                     // var_ で始まった場合は var_ をキー名に含めて重複を防ぐ
-                    if (match[0].includes('<!-- var_')) {
+                    if (match[0].includes('<!-- var_') || match[0].includes('[[var_')) {
                         key = 'var_' + key;
                     }
                     let val = match[2].trim();
