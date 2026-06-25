@@ -59,7 +59,7 @@ const calendarSection = document.getElementById('calendar-section');
 const calendarEl = document.getElementById('calendar');
 
 // Version Check
-console.log("【就活メモ】 アプリバージョン: v1.5.4 (2026-06-25 横スクロール対応版)");
+console.log("【就活メモ】 アプリバージョン: v1.6.0 (2026-06-25 UI・パーサー改善版)");
 
 // State
 let isSignupMode = false;
@@ -762,13 +762,45 @@ function renderFormatBuilder() {
         topRow.style.gap = '8px';
         topRow.style.alignItems = 'center';
 
+        const upBtn = document.createElement('button');
+        upBtn.innerHTML = '&#9650;';
+        upBtn.className = 'icon-btn';
+        upBtn.style.fontSize = '0.7rem';
+        upBtn.title = '上に移動';
+        upBtn.disabled = index === 0;
+        upBtn.addEventListener('click', () => {
+            if (index > 0) {
+                const temp = formatBuilderData[index];
+                formatBuilderData[index] = formatBuilderData[index - 1];
+                formatBuilderData[index - 1] = temp;
+                renderFormatBuilder();
+                saveFormatBuilderDataAsync();
+            }
+        });
+
+        const downBtn = document.createElement('button');
+        downBtn.innerHTML = '&#9660;';
+        downBtn.className = 'icon-btn';
+        downBtn.style.fontSize = '0.7rem';
+        downBtn.title = '下に移動';
+        downBtn.disabled = index === formatBuilderData.length - 1;
+        downBtn.addEventListener('click', () => {
+            if (index < formatBuilderData.length - 1) {
+                const temp = formatBuilderData[index];
+                formatBuilderData[index] = formatBuilderData[index + 1];
+                formatBuilderData[index + 1] = temp;
+                renderFormatBuilder();
+                saveFormatBuilderDataAsync();
+            }
+        });
+
         const nameInput = document.createElement('input');
         nameInput.type = 'text';
         nameInput.placeholder = "項目名 (例: 志望度)";
         nameInput.value = item.name;
         nameInput.style.flex = "1";
         nameInput.style.padding = "6px";
-        nameInput.addEventListener('input', (e) => { item.name = e.target.value; });
+        nameInput.addEventListener('input', (e) => { item.name = e.target.value; saveFormatBuilderDataAsync(); });
 
         const addAttrBtn = document.createElement('button');
         addAttrBtn.textContent = '+ 属性・ルールを追加';
@@ -802,6 +834,8 @@ function renderFormatBuilder() {
             renderFormatBuilder();
         });
 
+        topRow.appendChild(upBtn);
+        topRow.appendChild(downBtn);
         topRow.appendChild(nameInput);
         topRow.appendChild(addAttrBtn);
         topRow.appendChild(saveArchiveBtn);
@@ -1256,7 +1290,7 @@ generateFormatBtn.addEventListener('click', async () => {
 
     // 中間
     prompt += `\n人間が見やすい表などの出力ではなく、純粋なデータ行のみを出力せよ。\n\n`;
-    prompt += `出力フォーマット：\n/ (対象企業名1) / (調査内容) / ... /\n/ (対象企業名2) / (調査内容) / ... /\n\n`;
+    prompt += `出力フォーマット：\n/ (対象企業名1) / (調査内容) / ... / <!-- color:red --> <!-- resume:... -->\n/ (対象企業名2) / (調査内容) / ... /\n※条件に合致する場合のみ、各行の末尾のセル内にHTMLコメント（タグ）を含めてください。\n\n`;
     
     // 末尾
     prompt += `必ず「/」で情報が区切られたデータ行のみを出力すること。Markdownの表形式(ヘッダー行や---の区切り線)は絶対に生成しないでください。`;
@@ -1318,6 +1352,42 @@ function parseMarkdownTable(markdown) {
             const cleanLine = line.replace(stripRegex, '');
             const cells = cleanLine.split(delim).map(c => c.replace(/\*\*/g, '').trim());
             
+            let parsedResume = "";
+            let parsedColor = "";
+            let parsedMemo = "";
+            let parsedCalendar = [];
+
+            cells.forEach((cell, idx) => {
+                let currentCell = cell;
+                
+                const resumeMatch = currentCell.match(/<!--\s*resume:\s*(.*?)\s*-->/);
+                if (resumeMatch) {
+                    parsedResume = resumeMatch[1].trim();
+                    currentCell = currentCell.replace(resumeMatch[0], "").trim();
+                }
+
+                const memoRegex = /<!--\s*memo_(.*?):\s*(.*?)\s*-->/g;
+                let m;
+                while ((m = memoRegex.exec(currentCell)) !== null) {
+                    if (parsedMemo) parsedMemo += "\n\n";
+                    parsedMemo += `【${m[1].trim()}】\n${m[2].trim()}`;
+                    currentCell = currentCell.replace(m[0], "").trim();
+                }
+
+                const calRegex = /<!--\s*calendar_(.*?):\s*(.*?)\s*-->/g;
+                while ((m = calRegex.exec(currentCell)) !== null) {
+                    parsedCalendar.push({
+                        id: Date.now() + Math.random().toString(36).substr(2, 9),
+                        type: m[1].trim(),
+                        date: m[2].trim(),
+                        isCustomEvent: true
+                    });
+                    currentCell = currentCell.replace(m[0], "").trim();
+                }
+                
+                cells[idx] = currentCell;
+            });
+
             // Must have at least company name and another cell
             if (cells.length > 1 && cells[0] !== "") {
                 const rowData = {};
@@ -1328,6 +1398,11 @@ function parseMarkdownTable(markdown) {
                     }
                     rowData[cleanH] = cells[index] || "";
                 });
+                
+                if (parsedResume) rowData._parsedResume = parsedResume;
+                if (parsedMemo) rowData._parsedMemo = parsedMemo;
+                if (parsedCalendar.length > 0) rowData._parsedCalendar = parsedCalendar;
+                
                 data.push(rowData);
             }
         }
@@ -1371,6 +1446,38 @@ function parseMarkdownTable(markdown) {
             const cleanLine = line.replace(stripRegex, '');
             const cells = cleanLine.split(delimiter).map(c => c.replace(/\*\*/g, '').trim());
             
+            let parsedResume = "";
+            let parsedColor = "";
+            let parsedMemo = "";
+            let parsedCalendar = [];
+
+            cells.forEach((cell, idx) => {
+                let currentCell = cell;
+                const resumeMatch = currentCell.match(/<!--\s*resume:\s*(.*?)\s*-->/);
+                if (resumeMatch) {
+                    parsedResume = resumeMatch[1].trim();
+                    currentCell = currentCell.replace(resumeMatch[0], "").trim();
+                }
+                const memoRegex = /<!--\s*memo_(.*?):\s*(.*?)\s*-->/g;
+                let m;
+                while ((m = memoRegex.exec(currentCell)) !== null) {
+                    if (parsedMemo) parsedMemo += "\n\n";
+                    parsedMemo += `【${m[1].trim()}】\n${m[2].trim()}`;
+                    currentCell = currentCell.replace(m[0], "").trim();
+                }
+                const calRegex = /<!--\s*calendar_(.*?):\s*(.*?)\s*-->/g;
+                while ((m = calRegex.exec(currentCell)) !== null) {
+                    parsedCalendar.push({
+                        id: Date.now() + Math.random().toString(36).substr(2, 9),
+                        type: m[1].trim(),
+                        date: m[2].trim(),
+                        isCustomEvent: true
+                    });
+                    currentCell = currentCell.replace(m[0], "").trim();
+                }
+                cells[idx] = currentCell;
+            });
+
             if (cells.length >= headers.length) {
                 const rowData = {};
                 headers.forEach((header, index) => {
@@ -1380,6 +1487,11 @@ function parseMarkdownTable(markdown) {
                     }
                     rowData[cleanH] = cells[index] || "";
                 });
+                
+                if (parsedResume) rowData._parsedResume = parsedResume;
+                if (parsedMemo) rowData._parsedMemo = parsedMemo;
+                if (parsedCalendar.length > 0) rowData._parsedCalendar = parsedCalendar;
+
                 data.push(rowData);
             }
         }
@@ -1943,8 +2055,40 @@ function renderTable(data) {
     let companyKey = "会社名";
     if (currentData.some(d => d["企業名"])) companyKey = "企業名";
 
-    const dynamicHeaders = Array.from(headerSet);
+    // フォーマット設計図の並び順をベースにする
+    const builderHeaders = formatBuilderData
+        .filter(d => d && d.name && d.name.trim() !== "")
+        .map(d => d.name.trim());
+    
+    // 設計図にないヘッダーは末尾に追加
+    const extraHeaders = Array.from(headerSet).filter(h => !builderHeaders.includes(h));
+    const dynamicHeaders = [...builderHeaders, ...extraHeaders];
     const headers = [companyKey, ...dynamicHeaders, "アクション"];
+
+    // 各列の平均文字数を計算し、列幅を決定する
+    const columnWidths = {};
+    headers.forEach(h => {
+        if (h === "アクション" || h === companyKey) return;
+        let totalLen = 0;
+        let count = 0;
+        
+        // ヘッダー自身の文字数も計算に含める
+        totalLen += h.length;
+        count++;
+
+        tableData.forEach(item => {
+            let val = item[h] || "";
+            let text = String(val).replace(/<!--.*?-->/g, "").replace(/\*\*/g, "").trim();
+            if (text) {
+                totalLen += text.length;
+                count++;
+            }
+        });
+        
+        let avg = Math.round(totalLen / count);
+        // 平均が26文字未満ならその平均値(最小7)、超えれば26文字を基準とする
+        columnWidths[h] = Math.max(7, Math.min(26, avg));
+    });
 
     const thSelectAll = document.createElement('th');
     const cbAll = document.createElement('input');
@@ -1983,6 +2127,11 @@ function renderTable(data) {
         
         if (hiddenColumns.includes(h)) {
             th.style.display = 'none';
+        }
+        
+        if (columnWidths[h]) {
+            th.style.minWidth = columnWidths[h] + "em";
+            th.style.maxWidth = "26em";
         }
         
         tableHead.appendChild(th);

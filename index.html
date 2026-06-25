@@ -158,20 +158,12 @@
                 <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                     <div style="display: flex; align-items: center; gap: 16px;">
                         <h2>企業リスト DBMS</h2>
-                        <label style="font-size: 0.85rem; color: var(--text-muted); cursor: pointer;">
-                            <input type="checkbox" id="show-hidden-checkbox"> 非表示(アーカイブ)にした企業も表示
-                        </label>
-                        <button id="manage-hidden-columns-btn" class="btn text" style="font-size: 0.85rem; padding: 4px 8px;">隠した列を管理</button>
                     </div>
-                    <div>
-                        <button id="toggle-calendar-btn" class="btn text" style="margin-right: 8px;">📅 カレンダー表示</button>
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <label style="font-size: 0.85rem; display: flex; align-items: center; gap: 4px; cursor: pointer;">
-                                <input type="checkbox" id="show-hidden-rows-toggle"> 非表示の行を表示
-                            </label>
-                            <button id="excel-mode-btn" class="btn primary" style="width: auto; background: var(--success); color: #fff;">エクセルモード(全画面)</button>
-                        </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <button id="excel-mode-btn" class="btn primary" style="width: auto; background: var(--success); color: #fff;">エクセルモード(全画面)</button>
+                        <button id="view-settings-btn" class="btn text" style="font-weight: bold; background: rgba(0,0,0,0.05);" onclick="document.getElementById('view-settings-modal').style.display='flex'">⚙️ 表示設定</button>
                     </div>
+                </div>
                     <!-- Merge Controls -->
                     <div style="display: flex; gap: 8px; margin-bottom: 12px; align-items: center; background: rgba(0,0,0,0.03); padding: 8px; border-radius: 8px; flex-wrap: wrap;">
                         <span style="font-size: 0.85rem; font-weight: bold; color: var(--text-color);">🔗 チェックした行を操作:</span>
@@ -374,6 +366,24 @@
                         ノートを選択または新規作成してください
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- View Settings Modal -->
+    <div id="view-settings-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content glass-card" style="width: 400px; max-width: 95%;">
+            <div class="modal-header">
+                <h3>⚙️ 表示設定</h3>
+                <button class="icon-btn" onclick="document.getElementById('view-settings-modal').style.display='none'">✕</button>
+            </div>
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 16px;">
+                <label style="font-size: 0.95rem; display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px; border: 1px solid var(--border-color); border-radius: 8px;">
+                    <input type="checkbox" id="show-hidden-checkbox" style="transform: scale(1.2);"> 
+                    非表示(アーカイブ)にした企業も表示
+                </label>
+                <button id="toggle-calendar-btn" class="btn text" style="width: 100%; border: 1px solid var(--border-color); justify-content: center;">📅 カレンダー表示を切り替え</button>
+                <button id="manage-hidden-columns-btn" class="btn text" style="width: 100%; border: 1px solid var(--border-color); justify-content: center;">🙈 隠した列を管理</button>
             </div>
         </div>
     </div>
