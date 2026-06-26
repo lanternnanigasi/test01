@@ -1711,13 +1711,13 @@ function parseMarkdownTable(markdown) {
             cells.forEach((cell, idx) => {
                 let currentCell = cell;
                 
-                const resumeMatch = currentCell.match(/(?:<!--|\[\[)\s*resume:\s*(.*?)\s*(?:-->|\]\])/);
+                const resumeMatch = currentCell.match(/(?:<!--|\[\[)\s*resume:\s*([\s\S]*?)\s*(?:-->|\]\])/);
                 if (resumeMatch) {
                     parsedResume = resumeMatch[1].trim();
                     currentCell = currentCell.replace(resumeMatch[0], "").trim();
                 }
 
-                const memoRegex = /(?:<!--|\[\[)\s*memo_(.*?):\s*(.*?)\s*(?:-->|\]\])/g;
+                const memoRegex = /(?:<!--|\[\[)\s*memo_(.*?):\s*([\s\S]*?)\s*(?:-->|\]\])/g;
                 let m;
                 while ((m = memoRegex.exec(currentCell)) !== null) {
                     if (parsedMemo) parsedMemo += "\n\n";
@@ -1725,7 +1725,7 @@ function parseMarkdownTable(markdown) {
                     currentCell = currentCell.replace(m[0], "").trim();
                 }
 
-                const calRegex = /(?:<!--|\[\[)\s*calendar_(.*?):\s*(.*?)\s*(?:-->|\]\])/g;
+                const calRegex = /(?:<!--|\[\[)\s*calendar_(.*?):\s*([\s\S]*?)\s*(?:-->|\]\])/g;
                 while ((m = calRegex.exec(currentCell)) !== null) {
                     parsedCalendar.push({
                         id: Date.now() + Math.random().toString(36).substr(2, 9),
@@ -1804,19 +1804,19 @@ function parseMarkdownTable(markdown) {
 
             cells.forEach((cell, idx) => {
                 let currentCell = cell;
-                const resumeMatch = currentCell.match(/<!--\s*resume:\s*(.*?)\s*-->/);
+                const resumeMatch = currentCell.match(/(?:<!--|\[\[)\s*resume:\s*([\s\S]*?)\s*(?:-->|\]\])/);
                 if (resumeMatch) {
                     parsedResume = resumeMatch[1].trim();
                     currentCell = currentCell.replace(resumeMatch[0], "").trim();
                 }
-                const memoRegex = /<!--\s*memo_(.*?):\s*(.*?)\s*-->/g;
+                const memoRegex = /(?:<!--|\[\[)\s*memo_(.*?):\s*([\s\S]*?)\s*(?:-->|\]\])/g;
                 let m;
                 while ((m = memoRegex.exec(currentCell)) !== null) {
                     if (parsedMemo) parsedMemo += "\n\n";
                     parsedMemo += `【${m[1].trim()}】\n${m[2].trim()}`;
                     currentCell = currentCell.replace(m[0], "").trim();
                 }
-                const calRegex = /<!--\s*calendar_(.*?):\s*(.*?)\s*-->/g;
+                const calRegex = /(?:<!--|\[\[)\s*calendar_(.*?):\s*([\s\S]*?)\s*(?:-->|\]\])/g;
                 while ((m = calRegex.exec(currentCell)) !== null) {
                     parsedCalendar.push({
                         id: Date.now() + Math.random().toString(36).substr(2, 9),
