@@ -590,3 +590,20 @@ td {
     70% { box-shadow: 0 0 0 6px rgba(255, 77, 79, 0); }
     100% { box-shadow: 0 0 0 0 rgba(255, 77, 79, 0); }
 }
+
+details > summary .accordion-arrow {
+    display: inline-block;
+    transition: transform 0.3s ease;
+    font-size: 0.8em;
+    color: var(--text-muted);
+}
+details[open] > summary .accordion-arrow {
+    transform: rotate(90deg);
+}
+
+details > summary::-webkit-details-marker {
+    display: none;
+}
+details > summary {
+    list-style: none;
+}
