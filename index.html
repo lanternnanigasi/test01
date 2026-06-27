@@ -99,6 +99,40 @@
                 </div>
             </details>
 
+            <!-- API Integration Section -->
+            <details class="glass-card api-section" style="margin-bottom: 24px; padding: 16px; border-left: 4px solid var(--primary);">
+                <summary style="font-size: 1.2rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                    <span class="accordion-arrow">▶</span> 🤖 API連携（Make.com）設定
+                </summary>
+                <div style="margin-top: 16px; background: rgba(0,0,0,0.05); padding: 16px; border-radius: 8px;">
+                    <p style="font-size: 0.9rem; margin-bottom: 12px; color: var(--text-color);">
+                        自動化ツール（Make.com等）経由でメールを取り込む際に、AIが使用するフォーマットを設定します。
+                    </p>
+                    
+                    <div style="display: flex; flex-direction: column; gap: 16px;">
+                        <div>
+                            <label style="font-size: 0.9rem; font-weight: bold; display: block; margin-bottom: 8px;">1. APIで使用するフォーマットを選択:</label>
+                            <select id="api-format-select" style="padding: 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-color); color: var(--text-color); width: 100%; max-width: 400px;">
+                                <option value="">アーカイブから選択してください...</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label style="font-size: 0.9rem; font-weight: bold; display: block; margin-bottom: 8px;">2. ES生成・添削設定:</label>
+                            <label style="font-size: 0.9rem; cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: rgba(255, 59, 48, 0.1); border-radius: 8px; border: 1px solid rgba(255, 59, 48, 0.2); width: fit-content;">
+                                <input type="checkbox" id="api-es-toggle">
+                                API自動処理時にES生成・添削を有効にする（※AIのAPI料金が大幅に増加します）
+                            </label>
+                        </div>
+                        
+                        <div style="margin-top: 8px; display: flex; align-items: center; gap: 16px;">
+                            <button id="save-api-settings-btn" class="btn primary">クラウドに設定を反映（Make.comに適用）</button>
+                            <span id="api-settings-status" style="font-size: 0.85rem; color: var(--success); display: none;">✅ 保存しました</span>
+                        </div>
+                    </div>
+                </div>
+            </details>
+
             <!-- Data Import Section -->
             <details class="glass-card import-section" style="margin-bottom: 24px; padding: 16px;">
                 <summary style="font-size: 1.2rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px;">

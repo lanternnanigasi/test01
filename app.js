@@ -171,7 +171,7 @@ const calendarSection = document.getElementById('calendar-section');
 const calendarEl = document.getElementById('calendar');
 
 // Version Check
-console.log("【就活メモ】 アプリバージョン: v1.7.0 (2026-06-25 UI/カレンダー強化版)");
+console.log("【就活メモ】 アプリバージョン: v1.8.0 (2026-06-28 API連携・コスト削減設定強化版)");
 
 // State
 let isSignupMode = false;
@@ -972,6 +972,16 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.setItem('isEsEnabled', e.target.checked);
         });
     }
+    
+    // API settings initialization
+    const apiEsToggle = document.getElementById('api-es-toggle');
+    if (apiEsToggle) {
+        const savedApiEsToggle = localStorage.getItem('apiEsEnabled');
+        if (savedApiEsToggle !== null) {
+            apiEsToggle.checked = savedApiEsToggle === 'true';
+        }
+    }
+    // Note: apiFormatSelect value is restored inside renderFormatArchives() after the options are populated.
     const resetBtn = document.getElementById('reset-column-settings-btn');
     if (resetBtn) {
         resetBtn.addEventListener('click', () => {
@@ -1091,6 +1101,21 @@ function renderFormatArchives() {
         div.appendChild(btnGroup);
         list.appendChild(div);
     });
+
+    const apiSelect = document.getElementById('api-format-select');
+    if (apiSelect) {
+        const currentVal = apiSelect.value || localStorage.getItem('apiFormatId');
+        apiSelect.innerHTML = '<option value="">アーカイブから選択してください...</option>';
+        formatArchives.filter(arch => arch.type === "profile").forEach(arch => {
+            const opt = document.createElement('option');
+            opt.value = arch.id;
+            opt.textContent = arch.name;
+            apiSelect.appendChild(opt);
+        });
+        if (currentVal && Array.from(apiSelect.options).some(o => o.value === currentVal)) {
+            apiSelect.value = currentVal;
+        }
+    }
 }
 
 const defaultFormatBuilderData = [
@@ -1585,40 +1610,17 @@ function updateCalendarModalTypeSelect() {
     });
 }
 
-// --- Format Generator Logic ---
-generateFormatBtn.addEventListener('click', async () => {
-    const validItems = formatBuilderData.filter(d => d.name.trim() !== "");
-    if (validItems.length === 0) {
-        alert("抽出したい項目名を1つ以上入力してください！");
-        return;
-    }
-    
-    // Save settings
-    const dataStr = JSON.stringify(formatBuilderData);
-    if (auth && auth.currentUser) {
-        try {
-            const docRef = doc(db, "users", auth.currentUser.uid, "settings", "formatBuilder");
-            await setDoc(docRef, { data: dataStr }, { merge: true });
-        } catch (e) {}
-    }
-    localStorage.setItem('formatBuilderData', dataStr);
-    
-    // 冒頭
+// --- Format Generator Helper ---
+function buildPromptString(itemsList, esEnabled) {
     let prompt = `【システム動作指定（絶対厳守）】\nあなたはユーザーの入力データを特定のフォーマットに変換して出力するシステムです。以下のルールに一つでも違反した場合、データ取り込みが失敗しシステムがクラッシュします。必ず以下の制約を100%遵守して回答を生成してください。\n\n`;
     
-    // スパム・無効メールの除外と同一企業の統合指示
     prompt += `【最重要ルール: 無効データの除外と統合】\n`;
     prompt += `1. 提供されたテキストが企業からのスカウトメールや採用関連のメッセージではない場合（例：単なるおすすめ求人配信、リクナビNEXT等の自動送信メルマガ、スパムメール、登録完了通知など）は、絶対に表の行を作成せず、ただ一言「無効なスカウトメール」とだけ出力してください。\n`;
     prompt += `2. 提供されたテキストの中に「同一企業からの複数のメール内容（例：○○株式会社の面接案内と、同じく○○株式会社の締切案内）」が混ざっている場合、出力行を複数に分けず、必ず「1つの企業（1行）」として情報を統合し、すべての内容を1つの行（やメモ内）にまとめて出力してください。\n\n`;
 
-    // アカウント情報・就活の軸をプロンプトに追加
     const coreValuesEl = document.getElementById('account-core-values');
     const coreValuesText = coreValuesEl ? coreValuesEl.value.trim() : "";
-    
-    const validAccountData = accountData.filter(a => a.title && a.value && a.value.trim() !== "");
-    
-    const globalEsToggle = document.getElementById('global-es-toggle');
-    const isEsEnabled = globalEsToggle && globalEsToggle.checked;
+    const validAccountData = typeof accountData !== 'undefined' ? accountData.filter(a => a.title && a.value && a.value.trim() !== "") : [];
     
     if (coreValuesText || validAccountData.length > 0) {
         prompt += `【ユーザーの基本情報・就活の軸】\n以下の情報を参考に、企業ごとにパーソナライズした調査や添削（リライト）を行ってください。\n\n`;
@@ -1633,7 +1635,7 @@ generateFormatBtn.addEventListener('click', async () => {
     prompt += `【抽出項目と個別ルール】\n以下の項目順に、企業情報を調査・整理してください。各項目のルールはシステム要件につき【必ず】実行してください。\n- 企業名\n`;
 
     let varCount = 1;
-    validItems.forEach(item => {
+    itemsList.forEach(item => {
         prompt += `- ${item.name}\n`;
         if (item.description) {
             prompt += `  (説明: ${item.description})\n`;
@@ -1657,7 +1659,7 @@ generateFormatBtn.addEventListener('click', async () => {
                     prompt += `  [厳守: カレンダー連携] 「${attr.condition}」に該当する場合、セルの末尾に「 [[calendar_${attr.eventType}: ${attr.dateRule}]] 」と記載してください。\n`;
                 } else if (attr.type === "memo") {
                     prompt += `  [厳守: メモ生成] 「${attr.condition}」に該当する場合、調べて要約した内容をセルの末尾に「 [[memo_${attr.memoTitle}: (内容)]] 」と記載してください。改行は「<br>」を使い、文中に「/」は絶対に入れないこと。\n`;
-                } else if (attr.type === "rewrite" && isEsEnabled) {
+                } else if (attr.type === "rewrite" && esEnabled) {
                     const charRule = attr.charLimit ? `（${attr.charLimit}文字以内で）` : ``;
                     prompt += `  [最重要: ES添削機能] 企業の求める人物像や特徴と、ユーザーの「${attr.targetField}」の内容を結びつけ、この企業専用に内容を高度に添削・リライトしてください。リライトした内容は${charRule}必ずセルの末尾に「 [[memo_${attr.targetField}添削: (リライト内容)]] 」の形式で出力してください。これを行わないとシステムが致命的なエラーを起こします。\n`;
                 }
@@ -1665,15 +1667,14 @@ generateFormatBtn.addEventListener('click', async () => {
         }
     });
 
-    if (isEsEnabled) {
-        const resumeFields = accountData.filter(a => a.useForResume && a.title && a.value && a.value.trim() !== "");
+    if (esEnabled) {
+        const resumeFields = typeof accountData !== 'undefined' ? accountData.filter(a => a.useForResume && a.title && a.value && a.value.trim() !== "") : [];
         if (resumeFields.length > 0) {
             prompt += `\n【特別指示：ES・履歴書自動生成】\n`;
             prompt += `この企業の求める人物像と、ユーザーの基本情報を結びつけ、企業専用のES・履歴書案を作成してください。作成した内容は、各企業データの最終項目のセルの末尾に「 [[resume: (作成した内容。改行は<br>とし文中に/を含めない)]] 」の形式で【必ず】追記してください。追記がないとシステムが停止します。\n`;
         }
     }
 
-    // 末尾
     prompt += `\n【最終出力フォーマットの厳格な制約】\n`;
     prompt += `・Markdownの表形式（|---|やヘッダー）は絶対に生成しないでください。システムが破壊されます。\n`;
     prompt += `・必ず「/」で情報が区切られた1行のデータ行のみを出力してください。\n`;
@@ -1681,19 +1682,89 @@ generateFormatBtn.addEventListener('click', async () => {
     prompt += `・無効なメールの場合は、「無効なスカウトメール」とだけ出力し、絶対にデータ行を作らないでください。\n\n`;
     prompt += `[出力形式の例]\n/ A株式会社 / IT / (項目内容) / ... / 求める人物像です。 [[color:red]] [[memo_自己PR添削: ...]] /\n\n`;
     prompt += `それでは、上記の指示を100%遵守し、データ行のみを出力してください。`;
+    return prompt;
+}
+
+// --- Format Generator Logic ---
+generateFormatBtn.addEventListener('click', async () => {
+    const validItems = formatBuilderData.filter(d => d.name.trim() !== "");
+    if (validItems.length === 0) {
+        alert("抽出したい項目名を1つ以上入力してください！");
+        return;
+    }
+    
+    // Save settings
+    const dataStr = JSON.stringify(formatBuilderData);
+    if (auth && auth.currentUser) {
+        try {
+            const docRef = doc(db, "users", auth.currentUser.uid, "settings", "formatBuilder");
+            await setDoc(docRef, { data: dataStr }, { merge: true });
+        } catch (e) {}
+    }
+    localStorage.setItem('formatBuilderData', dataStr);
+    
+    const prompt = buildPromptString(formatBuilderData, isEsEnabled);
     
     formatOutput.value = prompt;
 
-    // API連携用に、生成された最終プロンプトテキスト自体もFirestoreに保存する
-    if (auth && auth.currentUser) {
-        try {
-            const promptDocRef = doc(db, "users", auth.currentUser.uid, "settings", "latestPrompt");
-            await setDoc(promptDocRef, { text: prompt }, { merge: true });
-        } catch (e) {
-            console.warn("Failed to save latest prompt to Firebase:", e);
-        }
-    }
 });
+
+// --- API Integration Logic ---
+const saveApiSettingsBtn = document.getElementById('save-api-settings-btn');
+const apiFormatSelect = document.getElementById('api-format-select');
+const apiEsToggle = document.getElementById('api-es-toggle');
+const apiSettingsStatus = document.getElementById('api-settings-status');
+
+if (saveApiSettingsBtn) {
+    saveApiSettingsBtn.addEventListener('click', async () => {
+        const selectedFormatId = apiFormatSelect ? apiFormatSelect.value : null;
+        if (!selectedFormatId) {
+            alert("APIで使用するフォーマットをアーカイブから選択してください。");
+            return;
+        }
+
+        const selectedArch = formatArchives.find(arch => String(arch.id) === String(selectedFormatId));
+        if (!selectedArch || selectedArch.type !== "profile") {
+            alert("有効なフォーマット全体設計図が選択されていません。");
+            return;
+        }
+
+        const isEsEnabled = apiEsToggle ? apiEsToggle.checked : false;
+        
+        // 選択されたフォーマットデータからプロンプトを生成
+        const prompt = buildPromptString(selectedArch.data, isEsEnabled);
+
+        // API用にFirebaseへ保存
+        if (auth && auth.currentUser) {
+            try {
+                saveApiSettingsBtn.disabled = true;
+                saveApiSettingsBtn.textContent = "保存中...";
+                
+                const promptDocRef = doc(db, "users", auth.currentUser.uid, "settings", "latestPrompt");
+                await setDoc(promptDocRef, { text: prompt }, { merge: true });
+                
+                // 次回リロード用に設定状態も保存
+                const apiPrefRef = doc(db, "users", auth.currentUser.uid, "settings", "apiPreferences");
+                await setDoc(apiPrefRef, { formatId: selectedFormatId, esEnabled: isEsEnabled }, { merge: true });
+                localStorage.setItem('apiFormatId', selectedFormatId);
+                localStorage.setItem('apiEsEnabled', isEsEnabled);
+
+                if (apiSettingsStatus) {
+                    apiSettingsStatus.style.display = 'inline-block';
+                    setTimeout(() => apiSettingsStatus.style.display = 'none', 3000);
+                }
+            } catch (e) {
+                console.error("Failed to save API settings:", e);
+                alert("API設定の保存に失敗しました。");
+            } finally {
+                saveApiSettingsBtn.disabled = false;
+                saveApiSettingsBtn.textContent = "クラウドに設定を反映（Make.comに適用）";
+            }
+        } else {
+            alert("ログインが必要です。");
+        }
+    });
+}
 
 copyFormatBtn.addEventListener('click', () => {
     if (!formatOutput.value) return;
