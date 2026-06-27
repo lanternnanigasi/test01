@@ -664,6 +664,7 @@ function listenToImportQueue() {
                         alert("Makeからの自動連携データを新しく取り込みました！");
                     } catch (e) {
                         console.error("Failed to parse import queue item:", e);
+                        console.error("【AIの出力内容（RAW）】\n", docData.rawText);
                         await updateDoc(doc(db, "users", auth.currentUser.uid, "importQueue", change.doc.id), { status: "error", error: e.message });
                     }
                 }
