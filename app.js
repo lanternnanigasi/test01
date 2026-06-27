@@ -1611,7 +1611,7 @@ function updateCalendarModalTypeSelect() {
 }
 
 // --- Format Generator Helper ---
-function buildPromptString(itemsList, esEnabled) {
+function buildPromptString(itemsList, esEnabled, isApiMode = false) {
     let prompt = `【システム動作指定（絶対厳守）】\nあなたはユーザーの入力データを特定のフォーマットに変換して出力するシステムです。以下のルールに一つでも違反した場合、データ取り込みが失敗しシステムがクラッシュします。必ず以下の制約を100%遵守して回答を生成してください。\n\n`;
     
     prompt += `【最重要ルール: 無効データの除外と統合】\n`;
@@ -1681,6 +1681,13 @@ function buildPromptString(itemsList, esEnabled) {
     prompt += `・前置き、挨拶、説明などのテキストは一切出力しないでください。\n`;
     prompt += `・無効なメールの場合は、「無効なスカウトメール」とだけ出力し、絶対にデータ行を作らないでください。\n\n`;
     prompt += `[出力形式の例]\n/ A株式会社 / IT / (項目内容) / ... / 求める人物像です。 [[color:red]] [[memo_自己PR添削: ...]] /\n\n`;
+    
+    if (isApiMode) {
+        prompt += `【API自動処理時の特別指示：トークン節約と調査徹底】\n`;
+        prompt += `・無駄な処理の完全カット：メール本文を読んで「調査の必要がない（広告、スパム、定型文のみの通知など）」と判断した場合は、絶対に情報をひねり出さず、直ちに処理を打ち切り「無効なスカウトメール」とだけ出力して終了してください。トークン消費の削減が最優先です。\n`;
+        prompt += `・質の高い自律調査：有効な企業であると判断した場合は、単にメールの内容をコピペ・要約するだけではなく、自身の知識ベース（あるいは利用可能なウェブ検索）をフル活用して「しっかり自分で調査」し、充実した内容を出力してください。\n\n`;
+    }
+    
     prompt += `それでは、上記の指示を100%遵守し、データ行のみを出力してください。`;
     return prompt;
 }
@@ -1732,7 +1739,7 @@ if (saveApiSettingsBtn) {
         const isEsEnabled = apiEsToggle ? apiEsToggle.checked : false;
         
         // 選択されたフォーマットデータからプロンプトを生成
-        const prompt = buildPromptString(selectedArch.data, isEsEnabled);
+        const prompt = buildPromptString(selectedArch.data, isEsEnabled, true);
 
         // API用にFirebaseへ保存
         if (auth && auth.currentUser) {
