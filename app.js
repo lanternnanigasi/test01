@@ -1711,13 +1711,13 @@ function parseMarkdownTable(markdown) {
             cells.forEach((cell, idx) => {
                 let currentCell = cell;
                 
-                const resumeMatch = currentCell.match(/(?:<!--|\[\[)\s*resume:\s*([\s\S]*?)\s*(?:-->|\]\])/);
+                const resumeMatch = currentCell.match(/(?:<!--|\[\[)\s*resume:\s*([\s\S]*?)(?:-->|\]\]|$)/);
                 if (resumeMatch) {
                     parsedResume = resumeMatch[1].trim();
                     currentCell = currentCell.replace(resumeMatch[0], "").trim();
                 }
 
-                const memoRegex = /(?:<!--|\[\[)\s*memo_(.*?):\s*([\s\S]*?)\s*(?:-->|\]\])/g;
+                const memoRegex = /(?:<!--|\[\[)\s*memo_(.*?):\s*([\s\S]*?)(?:-->|\]\]|$)/g;
                 let m;
                 while ((m = memoRegex.exec(currentCell)) !== null) {
                     if (parsedMemo) parsedMemo += "\n\n";
@@ -1725,7 +1725,7 @@ function parseMarkdownTable(markdown) {
                     currentCell = currentCell.replace(m[0], "").trim();
                 }
 
-                const calRegex = /(?:<!--|\[\[)\s*calendar_(.*?):\s*([\s\S]*?)\s*(?:-->|\]\])/g;
+                const calRegex = /(?:<!--|\[\[)\s*calendar_(.*?):\s*([\s\S]*?)(?:-->|\]\]|$)/g;
                 while ((m = calRegex.exec(currentCell)) !== null) {
                     parsedCalendar.push({
                         id: Date.now() + Math.random().toString(36).substr(2, 9),
@@ -1804,19 +1804,19 @@ function parseMarkdownTable(markdown) {
 
             cells.forEach((cell, idx) => {
                 let currentCell = cell;
-                const resumeMatch = currentCell.match(/(?:<!--|\[\[)\s*resume:\s*([\s\S]*?)\s*(?:-->|\]\])/);
+                const resumeMatch = currentCell.match(/(?:<!--|\[\[)\s*resume:\s*([\s\S]*?)(?:-->|\]\]|$)/);
                 if (resumeMatch) {
                     parsedResume = resumeMatch[1].trim();
                     currentCell = currentCell.replace(resumeMatch[0], "").trim();
                 }
-                const memoRegex = /(?:<!--|\[\[)\s*memo_(.*?):\s*([\s\S]*?)\s*(?:-->|\]\])/g;
+                const memoRegex = /(?:<!--|\[\[)\s*memo_(.*?):\s*([\s\S]*?)(?:-->|\]\]|$)/g;
                 let m;
                 while ((m = memoRegex.exec(currentCell)) !== null) {
                     if (parsedMemo) parsedMemo += "\n\n";
                     parsedMemo += `【${m[1].trim()}】\n${m[2].trim()}`;
                     currentCell = currentCell.replace(m[0], "").trim();
                 }
-                const calRegex = /(?:<!--|\[\[)\s*calendar_(.*?):\s*([\s\S]*?)\s*(?:-->|\]\])/g;
+                const calRegex = /(?:<!--|\[\[)\s*calendar_(.*?):\s*([\s\S]*?)(?:-->|\]\]|$)/g;
                 while ((m = calRegex.exec(currentCell)) !== null) {
                     parsedCalendar.push({
                         id: Date.now() + Math.random().toString(36).substr(2, 9),
@@ -2658,7 +2658,7 @@ function renderTable(data) {
                 else if (text.includes("<!-- color:red -->") || text.includes("[[color:red]]")) bgColorClass = "bg-red";
                 
                 // 変数や色付けなどのシステム制御タグを非表示にする
-                text = text.replace(/(?:<!--|\[\[)\s*(?:var_|resume|color|sort|memo|calendar)[\s\S]*?(?:-->|\]\])/g, "").trim();
+                text = text.replace(/(?:<!--|\[\[)\s*(?:var_|resume|color|sort|memo|calendar)[\s\S]*?(?:-->|\]\]|$)/g, "").trim();
 
                 // タグの抽出
                 const tags = [];
@@ -2838,7 +2838,7 @@ function processMetaData(dataList) {
         Object.values(item).forEach(text => {
             if (typeof text === 'string') {
                 allText += text + " ";
-                const regex = /(?:<!--|\[\[)\s*(?:sort|var)_(.*?):\s*(.*?)\s*(?:-->|\]\])/g;
+                const regex = /(?:<!--|\[\[)\s*(?:sort|var)_(.*?):\s*(.*?)(?:-->|\]\]|$)/g;
                 let match;
                 while ((match = regex.exec(text)) !== null) {
                     let key = match[1].trim();
