@@ -1707,8 +1707,14 @@ function parseMarkdownTable(markdown) {
     }
     
     if (separatorIndex <= 0) {
+        // エラーテキスト（無効なメール等）の検知
+        const mdTrimmed = markdown.trim();
+        if (mdTrimmed.includes('無効なスカウト') || mdTrimmed.includes('指定してください') || mdTrimmed.includes('入力してください') || (mdTrimmed.length < 50 && !mdTrimmed.includes('/'))) {
+            throw new Error("AIが「企業情報が含まれていない（または無効なメール）」と判定したため、インポートをスキップしました。");
+        }
+
         // Fallback: AI might have omitted headers and dividers.
-        // We will assume lines starting with '/' or '|' are data lines, 
+        // We will assume lines containing '/' or '|' are data lines, 
         // and map them based on the current formatBuilderData headers.
         const data = [];
         const validItems = formatBuilderData.filter(d => d && d.name && d.name.trim() !== "");
@@ -1716,7 +1722,14 @@ function parseMarkdownTable(markdown) {
         
         for (let i = 0; i < lines.length; i++) {
             let line = lines[i].trim();
-            const delim = line.startsWith('/') ? '/' : (line.startsWith('|') ? '|' : null);
+            if (!line) continue;
+            
+            let delim = null;
+            if (line.startsWith('/') || line.includes(' / ') || line.split('/').length > 3) {
+                delim = '/';
+            } else if (line.startsWith('|') || line.includes(' | ') || line.split('|').length > 3) {
+                delim = '|';
+            }
             if (!delim) continue;
             
             const escapeRegex = (s) => s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
@@ -1727,7 +1740,6 @@ function parseMarkdownTable(markdown) {
             const cells = cleanLine.split(delim).map(c => c.replace(/\*\*/g, '').trim());
             
             let parsedResume = "";
-            let parsedColor = "";
             let parsedMemo = "";
             let parsedCalendar = [];
 
@@ -1785,7 +1797,7 @@ function parseMarkdownTable(markdown) {
             return data;
         }
 
-        throw new Error("フォーマットのヘッダー行、または区切り行（/---/ 等）が見つかりません。AIがフォーマットを省略してデータから出力しています。「ヘッダーを省略しない」ようAIに指示してください。");
+        throw new Error("フォーマットに合致する企業データが見つかりませんでした。メール内に企業情報が含まれていない可能性があります。");
     }
 
     const escapeRegex = (s) => s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
