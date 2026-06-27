@@ -171,7 +171,7 @@ const calendarSection = document.getElementById('calendar-section');
 const calendarEl = document.getElementById('calendar');
 
 // Version Check
-console.log("【就活メモ】 アプリバージョン: v1.8.0 (2026-06-28 API連携・コスト削減設定強化版)");
+console.log("【就活メモ】 アプリバージョン: v1.8.1 (2026-06-28 API自動判定・不明データ対策版)");
 
 // State
 let isSignupMode = false;
