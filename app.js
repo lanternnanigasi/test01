@@ -650,15 +650,60 @@ function listenToImportQueue() {
                         const parsedData = parseMarkdownTable(docData.rawText);
                         const colRef = collection(db, "users", auth.currentUser.uid, "companies");
                         for (const item of parsedData) {
-                            item.createdAt = new Date().toISOString();
-                            item.isHidden = false;
-                            item.memo = item._parsedMemo || "";
-                            item.resume = item._parsedResume || "";
-                            item.customEvents = item._parsedCalendar || [];
+                            const companyName = item["企業名"];
+                            let existingItem = null;
+                            if (companyName) {
+                                existingItem = currentData.find(d => d["企業名"] === companyName);
+                            }
+
+                            const newMemo = item._parsedMemo || "";
+                            const newResume = item._parsedResume || "";
+                            const newCustomEvents = item._parsedCalendar || [];
+                            
                             delete item._parsedMemo;
                             delete item._parsedResume;
                             delete item._parsedCalendar;
-                            await addDoc(colRef, item);
+
+                            if (existingItem && existingItem.id) {
+                                // Update existing document
+                                const docRef = doc(db, "users", auth.currentUser.uid, "companies", existingItem.id);
+                                const updates = {};
+                                
+                                // Merge memo
+                                if (newMemo) {
+                                    updates.memo = existingItem.memo ? existingItem.memo + "\n\n" + newMemo : newMemo;
+                                }
+                                
+                                // Merge calendar
+                                if (newCustomEvents.length > 0) {
+                                    updates.customEvents = [...(existingItem.customEvents || []), ...newCustomEvents];
+                                }
+                                
+                                // Merge any valid string fields that are not "不明" or empty, if the existing one is empty or "不明"
+                                Object.keys(item).forEach(key => {
+                                    if (key !== "id" && key !== "createdAt" && key !== "isHidden" && key !== "memo" && key !== "resume" && key !== "customEvents") {
+                                        const newVal = item[key];
+                                        if (newVal && newVal !== "不明" && newVal !== "-" && newVal.trim() !== "") {
+                                            const oldVal = existingItem[key];
+                                            if (!oldVal || oldVal === "不明" || oldVal === "-" || oldVal.trim() === "") {
+                                                updates[key] = newVal;
+                                            }
+                                        }
+                                    }
+                                });
+
+                                if (Object.keys(updates).length > 0) {
+                                    await updateDoc(docRef, updates);
+                                }
+                            } else {
+                                // Create new document
+                                item.createdAt = new Date().toISOString();
+                                item.isHidden = false;
+                                item.memo = newMemo;
+                                item.resume = newResume;
+                                item.customEvents = newCustomEvents;
+                                await addDoc(colRef, item);
+                            }
                         }
                         
                         await deleteDoc(doc(db, "users", auth.currentUser.uid, "importQueue", change.doc.id));
@@ -685,19 +730,6 @@ function updateUI() {
         mainScreen.classList.add('active');
         loadData();
         listenToImportQueue();
-        
-        // エラーになったインポートキューを再試行する（今回の一時的な復旧措置）
-        if (auth.currentUser) {
-            import('firebase/firestore').then(({ collection, query, where, getDocs, updateDoc }) => {
-                const qRef = collection(db, "users", auth.currentUser.uid, "importQueue");
-                const q = query(qRef, where("status", "==", "error"));
-                getDocs(q).then(snapshot => {
-                    snapshot.forEach(d => {
-                        updateDoc(d.ref, { status: "pending", error: "" });
-                    });
-                });
-            });
-        }
     } else {
         authScreen.classList.add('active');
         mainScreen.classList.remove('active');
