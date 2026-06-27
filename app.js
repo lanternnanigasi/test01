@@ -2341,8 +2341,8 @@ async function updateItemData(id, updates) {
     }
 }
 
-async function deleteItemData(id) {
-    if (confirm("本当にこのデータを削除しますか？この操作は元に戻せません。")) {
+async function deleteItemData(id, skipConfirm = false) {
+    if (skipConfirm || confirm("本当にこのデータを削除しますか？この操作は元に戻せません。")) {
         mockData = mockData.filter(d => d.id !== id);
         deletedCompanyIds.push(id);
         localStorage.setItem('mockData', JSON.stringify(mockData));
@@ -2657,8 +2657,8 @@ function renderTable(data) {
                 else if (text.includes("<!-- color:yellow -->") || text.includes("[[color:yellow]]")) bgColorClass = "bg-yellow";
                 else if (text.includes("<!-- color:red -->") || text.includes("[[color:red]]")) bgColorClass = "bg-red";
                 
-                text = text.replace(/<!-- color:(.*?) -->/g, "").replace(/\[\[color:(.*?)\]\]/g, "").trim();
-                text = text.replace(/<!-- sort_(.*?):(.*?) -->/g, "").replace(/\[\[sort_(.*?):(.*?)\]\]/g, "").trim();
+                // 変数や色付けなどのシステム制御タグを非表示にする
+                text = text.replace(/(?:<!--|\[\[)\s*(?:var_|resume|color|sort|memo|calendar)[\s\S]*?(?:-->|\]\])/g, "").trim();
 
                 // タグの抽出
                 const tags = [];
@@ -3571,7 +3571,7 @@ async function executeMerge(mode) {
     // 1件目に合成結果を保存し、2件目以降を削除する
     await updateItemData(baseItem.id, baseItem);
     for (const item of otherItems) {
-        await deleteItemData(item.id); // 削除
+        await deleteItemData(item.id, true); // 削除 (確認ダイアログをスキップ)
     }
 
     // チェックを外す
@@ -3606,9 +3606,12 @@ if (bulkDeleteBtn) {
         try {
             const promises = [];
             cbs.forEach(cb => {
-                promises.push(deleteDoc(doc(db, "users", auth.currentUser.uid, "companies", cb.value)));
+                promises.push(deleteItemData(cb.value, true)); // 削除 (確認ダイアログをスキップ)
             });
             await Promise.all(promises);
+            document.querySelectorAll('.merge-checkbox').forEach(cb => cb.checked = false);
+            const selectAllCb = document.getElementById('merge-select-all');
+            if (selectAllCb) selectAllCb.checked = false;
         } catch (e) {
             alert("一括削除中にエラーが発生しました: " + e.message);
         }
