@@ -962,6 +962,16 @@ function renderColumnSettingsList() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    const globalEsToggle = document.getElementById('global-es-toggle');
+    if (globalEsToggle) {
+        const savedEsToggle = localStorage.getItem('isEsEnabled');
+        if (savedEsToggle !== null) {
+            globalEsToggle.checked = savedEsToggle === 'true';
+        }
+        globalEsToggle.addEventListener('change', (e) => {
+            localStorage.setItem('isEsEnabled', e.target.checked);
+        });
+    }
     const resetBtn = document.getElementById('reset-column-settings-btn');
     if (resetBtn) {
         resetBtn.addEventListener('click', () => {
@@ -1647,7 +1657,7 @@ generateFormatBtn.addEventListener('click', async () => {
                     prompt += `  [厳守: カレンダー連携] 「${attr.condition}」に該当する場合、セルの末尾に「 [[calendar_${attr.eventType}: ${attr.dateRule}]] 」と記載してください。\n`;
                 } else if (attr.type === "memo") {
                     prompt += `  [厳守: メモ生成] 「${attr.condition}」に該当する場合、調べて要約した内容をセルの末尾に「 [[memo_${attr.memoTitle}: (内容)]] 」と記載してください。改行は「<br>」を使い、文中に「/」は絶対に入れないこと。\n`;
-                } else if (attr.type === "rewrite") {
+                } else if (attr.type === "rewrite" && isEsEnabled) {
                     const charRule = attr.charLimit ? `（${attr.charLimit}文字以内で）` : ``;
                     prompt += `  [最重要: ES添削機能] 企業の求める人物像や特徴と、ユーザーの「${attr.targetField}」の内容を結びつけ、この企業専用に内容を高度に添削・リライトしてください。リライトした内容は${charRule}必ずセルの末尾に「 [[memo_${attr.targetField}添削: (リライト内容)]] 」の形式で出力してください。これを行わないとシステムが致命的なエラーを起こします。\n`;
                 }
