@@ -171,7 +171,7 @@ const calendarSection = document.getElementById('calendar-section');
 const calendarEl = document.getElementById('calendar');
 
 // Version Check
-console.log("【就活メモ】 アプリバージョン: v1.9.1 (2026-06-28 エラーログ非表示・キュー制御改善版)");
+console.log("【就活メモ】 アプリバージョン: v1.8.2 (2026-06-28 エラーログ非表示・キュー制御改善版)");
 
 // State
 let isSignupMode = false;
@@ -1565,6 +1565,7 @@ async function loadSettings() {
     renderFormatBuilder();
     renderEventTypes();
     updateCalendarModalTypeSelect();
+    renderFormatArchives();
 }
 
 function saveCalendarEventTypes() {
