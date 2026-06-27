@@ -1590,6 +1590,11 @@ generateFormatBtn.addEventListener('click', async () => {
     // 冒頭
     let prompt = `【システム動作指定（絶対厳守）】\nあなたはユーザーの入力データを特定のフォーマットに変換して出力するシステムです。以下のルールに一つでも違反した場合、データ取り込みが失敗しシステムがクラッシュします。必ず以下の制約を100%遵守して回答を生成してください。\n\n`;
     
+    // スパム・無効メールの除外と同一企業の統合指示
+    prompt += `【最重要ルール: 無効データの除外と統合】\n`;
+    prompt += `1. 提供されたテキストが企業からのスカウトメールや採用関連のメッセージではない場合（例：単なるおすすめ求人配信、リクナビNEXT等の自動送信メルマガ、スパムメール、登録完了通知など）は、絶対に表の行を作成せず、ただ一言「無効なスカウトメール」とだけ出力してください。\n`;
+    prompt += `2. 提供されたテキストの中に「同一企業からの複数のメール内容（例：○○株式会社の面接案内と、同じく○○株式会社の締切案内）」が混ざっている場合、出力行を複数に分けず、必ず「1つの企業（1行）」として情報を統合し、すべての内容を1つの行（やメモ内）にまとめて出力してください。\n\n`;
+
     // アカウント情報・就活の軸をプロンプトに追加
     const coreValuesEl = document.getElementById('account-core-values');
     const coreValuesText = coreValuesEl ? coreValuesEl.value.trim() : "";
@@ -1656,7 +1661,8 @@ generateFormatBtn.addEventListener('click', async () => {
     prompt += `\n【最終出力フォーマットの厳格な制約】\n`;
     prompt += `・Markdownの表形式（|---|やヘッダー）は絶対に生成しないでください。システムが破壊されます。\n`;
     prompt += `・必ず「/」で情報が区切られた1行のデータ行のみを出力してください。\n`;
-    prompt += `・前置き、挨拶、説明などのテキストは一切出力しないでください。\n\n`;
+    prompt += `・前置き、挨拶、説明などのテキストは一切出力しないでください。\n`;
+    prompt += `・無効なメールの場合は、「無効なスカウトメール」とだけ出力し、絶対にデータ行を作らないでください。\n\n`;
     prompt += `[出力形式の例]\n/ A株式会社 / IT / (項目内容) / ... / 求める人物像です。 [[color:red]] [[memo_自己PR添削: ...]] /\n\n`;
     prompt += `それでは、上記の指示を100%遵守し、データ行のみを出力してください。`;
     
@@ -2267,12 +2273,37 @@ function applyFiltersAndRender() {
     
     // 2. Sort
     const sortVal = sortSelect.value;
+    
+    // 同一企業をグループ化し、グループ内の最新の追加日時でソートするための事前計算
+    const latestByCompany = {};
+    if (sortVal === 'created_desc') {
+        filteredData.forEach(d => {
+            const cName = d['企業名'] || d['会社名'] || '不明';
+            const cTime = new Date(d.createdAt || 0).getTime();
+            if (!latestByCompany[cName] || cTime > latestByCompany[cName]) {
+                latestByCompany[cName] = cTime;
+            }
+        });
+    }
+
     filteredData.sort((a, b) => {
         let valA = 0, valB = 0;
         
         switch (sortVal) {
             case 'created_desc':
-                return new Date(b.createdAt) - new Date(a.createdAt);
+                const cNameA = a['企業名'] || a['会社名'] || '不明';
+                const cNameB = b['企業名'] || b['会社名'] || '不明';
+                
+                // 1. グループの最新日時で降順ソート
+                if (latestByCompany[cNameB] !== latestByCompany[cNameA]) {
+                    return latestByCompany[cNameB] - latestByCompany[cNameA];
+                }
+                // 2. グループが同じ場合は企業名でまとめる
+                if (cNameA !== cNameB) {
+                    return cNameA.localeCompare(cNameB);
+                }
+                // 3. 同じ企業内では、追加日時の降順（最新が上）
+                return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
             case 'star_desc':
                 valA = a._meta?.star || 0;
                 valB = b._meta?.star || 0;
@@ -2508,7 +2539,7 @@ function renderTable(data) {
         dynamicHeaders = [...sorted, ...remaining];
     }
 
-    const headers = [companyKey, ...dynamicHeaders, "アクション"];
+    const headers = [companyKey, "追加日時", ...dynamicHeaders, "アクション"];
 
     // 各列の平均文字数を計算し、列幅を決定する
     const columnWidths = {};
@@ -2613,6 +2644,19 @@ function renderTable(data) {
                 nameDiv.textContent = item[h] || "不明";
                 nameDiv.style.fontWeight = "bold";
                 td.appendChild(nameDiv);
+
+            } else if (h === "追加日時") {
+                const dateDiv = document.createElement('div');
+                const d = new Date(item.createdAt || 0);
+                if (!isNaN(d.getTime()) && d.getTime() > 0) {
+                    dateDiv.textContent = `${d.getFullYear()}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+                } else {
+                    dateDiv.textContent = "-";
+                }
+                dateDiv.style.fontSize = "0.85em";
+                dateDiv.style.color = "var(--text-color)";
+                dateDiv.style.opacity = "0.7";
+                td.appendChild(dateDiv);
 
             } else if (h === "アクション") {
                 const companyName = item[companyKey] || "不明";
