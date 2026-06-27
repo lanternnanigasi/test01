@@ -678,6 +678,19 @@ function updateUI() {
         mainScreen.classList.add('active');
         loadData();
         listenToImportQueue();
+        
+        // エラーになったインポートキューを再試行する（今回の一時的な復旧措置）
+        if (auth.currentUser) {
+            import('firebase/firestore').then(({ collection, query, where, getDocs, updateDoc }) => {
+                const qRef = collection(db, "users", auth.currentUser.uid, "importQueue");
+                const q = query(qRef, where("status", "==", "error"));
+                getDocs(q).then(snapshot => {
+                    snapshot.forEach(d => {
+                        updateDoc(d.ref, { status: "pending", error: "" });
+                    });
+                });
+            });
+        }
     } else {
         authScreen.classList.add('active');
         mainScreen.classList.remove('active');
@@ -1670,6 +1683,15 @@ copyFormatBtn.addEventListener('click', () => {
 
 // --- Markdown Parser Logic ---
 function parseMarkdownTable(markdown) {
+    // 括弧内の改行を <br> に変換する (ES等の長文出力対応)
+    markdown = markdown.replace(/\[\[([\s\S]*?)\]\]/g, (match) => {
+        return match.replace(/\n/g, '<br>');
+    });
+    // <!-- --> 内の改行も変換
+    markdown = markdown.replace(/<!--([\s\S]*?)-->/g, (match) => {
+        return match.replace(/\n/g, '<br>');
+    });
+
     const lines = markdown.trim().split('\n');
     
     let separatorIndex = -1;
