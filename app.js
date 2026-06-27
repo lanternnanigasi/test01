@@ -3034,9 +3034,9 @@ document.addEventListener('keydown', (e) => {
     if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') return;
     
     if (e.key === 'ArrowRight') {
-        tableContainer.scrollBy({ left: 150, behavior: 'smooth' });
+        tableContainer.scrollBy({ left: 450 });
     } else if (e.key === 'ArrowLeft') {
-        tableContainer.scrollBy({ left: -150, behavior: 'smooth' });
+        tableContainer.scrollBy({ left: -450 });
     }
 });
 
