@@ -171,7 +171,7 @@ const calendarSection = document.getElementById('calendar-section');
 const calendarEl = document.getElementById('calendar');
 
 // Version Check
-console.log("【就活メモ】 アプリバージョン: v1.9.0 (2026-06-28 API自動判定＆再調査制御・不明データ対策版)");
+console.log("【就活メモ】 アプリバージョン: v1.9.1 (2026-06-28 エラーログ非表示・キュー制御改善版)");
 
 // State
 let isSignupMode = false;
@@ -705,9 +705,10 @@ function listenToImportQueue() {
                                 await addDoc(colRef, item);
                             }
                         }
-                        
+                        if (parsedData.length > 0) {
+                            importedCount++;
+                        }
                         await deleteDoc(doc(db, "users", auth.currentUser.uid, "importQueue", change.doc.id));
-                        importedCount++;
                     } catch (e) {
                         console.error("Failed to parse import queue item:", e);
                         console.error("【AIの出力内容（RAW）】\n", docData.rawText);
@@ -1914,7 +1915,8 @@ function parseMarkdownTable(markdown) {
         // エラーテキスト（無効なメール等）の検知
         const mdTrimmed = markdown.trim();
         if (mdTrimmed.includes('無効なスカウト') || mdTrimmed.includes('指定してください') || mdTrimmed.includes('入力してください') || (mdTrimmed.length < 50 && !mdTrimmed.includes('/'))) {
-            throw new Error("AIが「企業情報が含まれていない（または無効なメール）」と判定したため、インポートをスキップしました。");
+            // スキップ対象のメールの場合は空配列を返し、エラーを吐かない
+            return [];
         }
 
         // Fallback: AI might have omitted headers and dividers.
