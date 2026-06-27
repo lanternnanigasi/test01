@@ -1686,7 +1686,14 @@ function buildPromptString(itemsList, esEnabled, isApiMode = false) {
     if (isApiMode) {
         prompt += `【API自動処理時の特別指示：トークン節約と調査徹底】\n`;
         prompt += `・無駄な処理の完全カット：メール本文を読んで「調査の必要がない（広告、スパム、定型文のみの通知など）」と判断した場合は、絶対に情報をひねり出さず、直ちに処理を打ち切り「無効なスカウトメール」とだけ出力して終了してください。トークン消費の削減が最優先です。\n`;
-        prompt += `・質の高い自律調査：有効な企業であると判断した場合は、単にメールの内容をコピペ・要約するだけではなく、自身の知識ベース（あるいは利用可能なウェブ検索）をフル活用して「しっかり自分で調査」し、充実した内容を出力してください。\n\n`;
+        
+        const existingNames = (typeof currentData !== 'undefined' ? currentData.map(d => d['企業名']).filter(Boolean) : []);
+        if (existingNames.length > 0) {
+            prompt += `・【超重要：登録済み企業の調査スキップ】以下の企業は既にデータベースに登録済みです：\n[ ${existingNames.join(', ')} ]\n`;
+            prompt += `受信したメールが上記の「登録済み企業」からのものである場合、初任給や職種などの「基本的な企業情報の調査」はトークンの無駄になるため一切行わず、該当する項目はすべて「不明」として出力してください。ただし、メール内に記載されている「新しい締め切り日」「選考ステップの進行」「重要なお知らせ」がある場合のみ、それらを該当項目やメモ欄に抽出して出力してください。（システム側で自動的に既存データと結合・追記します）\n`;
+        }
+
+        prompt += `・質の高い自律調査：上記に該当しない新規の有効な企業であると判断した場合は、単にメールの内容をコピペ・要約するだけではなく、自身の知識ベース（あるいは利用可能なウェブ検索）をフル活用して「しっかり自分で調査」し、充実した内容を出力してください。\n\n`;
     }
     
     prompt += `それでは、上記の指示を100%遵守し、データ行のみを出力してください。`;
@@ -1711,6 +1718,8 @@ generateFormatBtn.addEventListener('click', async () => {
     }
     localStorage.setItem('formatBuilderData', dataStr);
     
+    const globalEsToggle = document.getElementById('global-es-toggle');
+    const isEsEnabled = globalEsToggle ? globalEsToggle.checked : false;
     const prompt = buildPromptString(formatBuilderData, isEsEnabled);
     
     formatOutput.value = prompt;
@@ -2035,28 +2044,106 @@ importBtn.addEventListener('click', async () => {
         if (auth && auth.currentUser) {
             const colRef = collection(db, "users", auth.currentUser.uid, "companies");
             for (const item of parsedData) {
-                item.createdAt = new Date().toISOString();
-                item.isHidden = false;
-                item.memo = item._parsedMemo || "";
-                item.resume = item._parsedResume || "";
-                item.customEvents = item._parsedCalendar || [];
+                const companyName = item["企業名"];
+                let existingItem = null;
+                if (companyName) {
+                    existingItem = currentData.find(d => d["企業名"] === companyName);
+                }
+
+                const newMemo = item._parsedMemo || "";
+                const newResume = item._parsedResume || "";
+                const newCustomEvents = item._parsedCalendar || [];
+                
                 delete item._parsedMemo;
                 delete item._parsedResume;
                 delete item._parsedCalendar;
-                await addDoc(colRef, item);
+
+                if (existingItem && existingItem.id) {
+                    // Update existing document
+                    const docRef = doc(db, "users", auth.currentUser.uid, "companies", existingItem.id);
+                    const updates = {};
+                    
+                    // Merge memo
+                    if (newMemo) {
+                        updates.memo = existingItem.memo ? existingItem.memo + "\n\n" + newMemo : newMemo;
+                    }
+                    
+                    // Merge calendar
+                    if (newCustomEvents.length > 0) {
+                        updates.customEvents = [...(existingItem.customEvents || []), ...newCustomEvents];
+                    }
+                    
+                    // Merge any valid string fields that are not "不明" or empty, if the existing one is empty or "不明"
+                    Object.keys(item).forEach(key => {
+                        if (key !== "id" && key !== "createdAt" && key !== "isHidden" && key !== "memo" && key !== "resume" && key !== "customEvents") {
+                            const newVal = item[key];
+                            if (newVal && newVal !== "不明" && newVal !== "-" && newVal.trim() !== "") {
+                                const oldVal = existingItem[key];
+                                if (!oldVal || oldVal === "不明" || oldVal === "-" || oldVal.trim() === "") {
+                                    updates[key] = newVal;
+                                }
+                            }
+                        }
+                    });
+
+                    if (Object.keys(updates).length > 0) {
+                        await updateDoc(docRef, updates);
+                    }
+                } else {
+                    // Create new document
+                    item.createdAt = new Date().toISOString();
+                    item.isHidden = false;
+                    item.memo = newMemo;
+                    item.resume = newResume;
+                    item.customEvents = newCustomEvents;
+                    await addDoc(colRef, item);
+                }
             }
         } else {
             parsedData.forEach(item => {
-                item.id = Date.now() + Math.random().toString(36).substr(2, 9);
-                item.createdAt = new Date().toISOString();
-                item.isHidden = false;
-                item.memo = item._parsedMemo || "";
-                item.resume = item._parsedResume || "";
-                item.customEvents = item._parsedCalendar || [];
+                const companyName = item["企業名"];
+                let existingItem = null;
+                if (companyName) {
+                    existingItem = mockData.find(d => d["企業名"] === companyName);
+                }
+
+                const newMemo = item._parsedMemo || "";
+                const newResume = item._parsedResume || "";
+                const newCustomEvents = item._parsedCalendar || [];
+                
                 delete item._parsedMemo;
                 delete item._parsedResume;
                 delete item._parsedCalendar;
-                mockData.push(item);
+
+                if (existingItem) {
+                    // Update existing
+                    if (newMemo) {
+                        existingItem.memo = existingItem.memo ? existingItem.memo + "\n\n" + newMemo : newMemo;
+                    }
+                    if (newCustomEvents.length > 0) {
+                        existingItem.customEvents = [...(existingItem.customEvents || []), ...newCustomEvents];
+                    }
+                    Object.keys(item).forEach(key => {
+                        if (key !== "id" && key !== "createdAt" && key !== "isHidden" && key !== "memo" && key !== "resume" && key !== "customEvents") {
+                            const newVal = item[key];
+                            if (newVal && newVal !== "不明" && newVal !== "-" && newVal.trim() !== "") {
+                                const oldVal = existingItem[key];
+                                if (!oldVal || oldVal === "不明" || oldVal === "-" || oldVal.trim() === "") {
+                                    existingItem[key] = newVal;
+                                }
+                            }
+                        }
+                    });
+                } else {
+                    // Add new
+                    item.id = Date.now() + Math.random().toString(36).substr(2, 9);
+                    item.createdAt = new Date().toISOString();
+                    item.isHidden = false;
+                    item.memo = newMemo;
+                    item.resume = newResume;
+                    item.customEvents = newCustomEvents;
+                    mockData.push(item);
+                }
             });
             localStorage.setItem('mockData', JSON.stringify(mockData));
         }
