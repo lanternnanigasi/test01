@@ -641,7 +641,8 @@ function listenToImportQueue() {
     if (!auth || !auth.currentUser) return;
     const qRef = collection(db, "users", auth.currentUser.uid, "importQueue");
     importQueueUnsubscribe = onSnapshot(qRef, async (snapshot) => {
-        snapshot.docChanges().forEach(async (change) => {
+        let importedCount = 0;
+        const promises = snapshot.docChanges().map(async (change) => {
             if (change.type === "added") {
                 const docData = change.doc.data();
                 if (docData.status === "pending" && docData.rawText) {
@@ -661,7 +662,7 @@ function listenToImportQueue() {
                         }
                         
                         await deleteDoc(doc(db, "users", auth.currentUser.uid, "importQueue", change.doc.id));
-                        alert("Makeからの自動連携データを新しく取り込みました！");
+                        importedCount++;
                     } catch (e) {
                         console.error("Failed to parse import queue item:", e);
                         console.error("【AIの出力内容（RAW）】\n", docData.rawText);
@@ -670,6 +671,11 @@ function listenToImportQueue() {
                 }
             }
         });
+
+        await Promise.all(promises);
+        if (importedCount > 0) {
+            alert(`Makeからの自動連携データを ${importedCount} 件 新しく取り込みました！`);
+        }
     });
 }
 
