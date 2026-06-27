@@ -982,6 +982,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     // Note: apiFormatSelect value is restored inside renderFormatArchives() after the options are populated.
+    renderFormatArchives();
     const resetBtn = document.getElementById('reset-column-settings-btn');
     if (resetBtn) {
         resetBtn.addEventListener('click', () => {
@@ -1114,6 +1115,10 @@ function renderFormatArchives() {
         });
         if (currentVal && Array.from(apiSelect.options).some(o => o.value === currentVal)) {
             apiSelect.value = currentVal;
+            try {
+                const savedCheckedItems = JSON.parse(localStorage.getItem('apiReinvestigateItems') || '[]');
+                renderReinvestigateCheckboxes(currentVal, savedCheckedItems);
+            } catch(e) {}
         }
     }
 }
@@ -1611,7 +1616,7 @@ function updateCalendarModalTypeSelect() {
 }
 
 // --- Format Generator Helper ---
-function buildPromptString(itemsList, esEnabled, isApiMode = false) {
+function buildPromptString(itemsList, esEnabled, isApiMode = false, checkedItems = []) {
     let prompt = `【システム動作指定（絶対厳守）】\nあなたはユーザーの入力データを特定のフォーマットに変換して出力するシステムです。以下のルールに一つでも違反した場合、データ取り込みが失敗しシステムがクラッシュします。必ず以下の制約を100%遵守して回答を生成してください。\n\n`;
     
     prompt += `【最重要ルール: 無効データの除外と統合】\n`;
@@ -1691,6 +1696,9 @@ function buildPromptString(itemsList, esEnabled, isApiMode = false) {
         if (existingNames.length > 0) {
             prompt += `・【超重要：登録済み企業の調査スキップ】以下の企業は既にデータベースに登録済みです：\n[ ${existingNames.join(', ')} ]\n`;
             prompt += `受信したメールが上記の「登録済み企業」からのものである場合、初任給や職種などの「基本的な企業情報の調査」はトークンの無駄になるため一切行わず、該当する項目はすべて「不明」として出力してください。ただし、メール内に記載されている「新しい締め切り日」「選考ステップの進行」「重要なお知らせ」がある場合のみ、それらを該当項目やメモ欄に抽出して出力してください。（システム側で自動的に既存データと結合・追記します）\n`;
+            if (checkedItems && checkedItems.length > 0) {
+                prompt += `・【例外：既存企業でも毎回再調査する項目】上記の「登録済み企業」からのメールであっても、以下の項目だけは例外的に毎回必ず最新情報を調査・抽出して出力してください：\n[ ${checkedItems.join(', ')} ]\n`;
+            }
         }
 
         prompt += `・質の高い自律調査：上記に該当しない新規の有効な企業であると判断した場合は、単にメールの内容をコピペ・要約するだけではなく、自身の知識ベース（あるいは利用可能なウェブ検索）をフル活用して「しっかり自分で調査」し、充実した内容を出力してください。\n\n`;
@@ -1732,6 +1740,54 @@ const apiFormatSelect = document.getElementById('api-format-select');
 const apiEsToggle = document.getElementById('api-es-toggle');
 const apiSettingsStatus = document.getElementById('api-settings-status');
 
+function renderReinvestigateCheckboxes(formatId, savedCheckedItems = []) {
+    const container = document.getElementById('api-reinvestigate-container');
+    const list = document.getElementById('api-reinvestigate-list');
+    if (!container || !list) return;
+
+    const selectedArch = formatArchives.find(arch => String(arch.id) === String(formatId));
+    if (!selectedArch || selectedArch.type !== "profile" || !selectedArch.data) {
+        container.style.display = 'none';
+        return;
+    }
+
+    container.style.display = 'block';
+    list.innerHTML = '';
+    
+    selectedArch.data.forEach(item => {
+        if (!item.name || item.name.trim() === '') return;
+        
+        const label = document.createElement('label');
+        label.style.display = 'flex';
+        label.style.alignItems = 'center';
+        label.style.gap = '4px';
+        label.style.fontSize = '0.85rem';
+        label.style.cursor = 'pointer';
+        label.style.background = 'rgba(255,255,255,0.8)';
+        label.style.padding = '4px 8px';
+        label.style.borderRadius = '4px';
+        label.style.border = '1px solid var(--border-color)';
+        
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.className = 'reinvestigate-cb';
+        cb.value = item.name.trim();
+        if (savedCheckedItems.includes(item.name.trim())) {
+            cb.checked = true;
+        }
+        
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode(item.name.trim()));
+        list.appendChild(label);
+    });
+}
+
+if (apiFormatSelect) {
+    apiFormatSelect.addEventListener('change', (e) => {
+        renderReinvestigateCheckboxes(e.target.value);
+    });
+}
+
 if (saveApiSettingsBtn) {
     saveApiSettingsBtn.addEventListener('click', async () => {
         const selectedFormatId = apiFormatSelect ? apiFormatSelect.value : null;
@@ -1748,8 +1804,13 @@ if (saveApiSettingsBtn) {
 
         const isEsEnabled = apiEsToggle ? apiEsToggle.checked : false;
         
+        const checkedItems = [];
+        document.querySelectorAll('.reinvestigate-cb:checked').forEach(cb => {
+            checkedItems.push(cb.value);
+        });
+        
         // 選択されたフォーマットデータからプロンプトを生成
-        const prompt = buildPromptString(selectedArch.data, isEsEnabled, true);
+        const prompt = buildPromptString(selectedArch.data, isEsEnabled, true, checkedItems);
 
         // API用にFirebaseへ保存
         if (auth && auth.currentUser) {
@@ -1762,9 +1823,10 @@ if (saveApiSettingsBtn) {
                 
                 // 次回リロード用に設定状態も保存
                 const apiPrefRef = doc(db, "users", auth.currentUser.uid, "settings", "apiPreferences");
-                await setDoc(apiPrefRef, { formatId: selectedFormatId, esEnabled: isEsEnabled }, { merge: true });
+                await setDoc(apiPrefRef, { formatId: selectedFormatId, esEnabled: isEsEnabled, reinvestigateItems: checkedItems }, { merge: true });
                 localStorage.setItem('apiFormatId', selectedFormatId);
                 localStorage.setItem('apiEsEnabled', isEsEnabled);
+                localStorage.setItem('apiReinvestigateItems', JSON.stringify(checkedItems));
 
                 if (apiSettingsStatus) {
                     apiSettingsStatus.style.display = 'inline-block';

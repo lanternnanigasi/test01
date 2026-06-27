@@ -125,6 +125,14 @@
                             </label>
                         </div>
                         
+                        <div id="api-reinvestigate-container" style="display: none;">
+                            <label style="font-size: 0.9rem; font-weight: bold; display: block; margin-bottom: 8px;">3. 既存企業からのメール受信時に「毎回再調査」する項目を選択:</label>
+                            <div id="api-reinvestigate-list" style="display: flex; flex-wrap: wrap; gap: 12px; padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+                                <!-- Checkboxes injected here -->
+                            </div>
+                            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">※チェックを入れていない項目は、既存企業の場合「不明」として処理をスキップしトークンを節約します（特記事項等は常に追記されます）</p>
+                        </div>
+                        
                         <div style="margin-top: 8px; display: flex; align-items: center; gap: 16px;">
                             <button id="save-api-settings-btn" class="btn primary">クラウドに設定を反映（Make.comに適用）</button>
                             <span id="api-settings-status" style="font-size: 0.85rem; color: var(--success); display: none;">✅ 保存しました</span>
