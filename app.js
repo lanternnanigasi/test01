@@ -1822,10 +1822,10 @@ function parseMarkdownTable(markdown) {
 
             if (line.includes(' / ')) {
                 delim = '/';
-                splitRegex = /\s*\/\s*/;
+                splitRegex = /\s+\/\s+/;
             } else if (line.startsWith('/') && line.split(/(?<!:)\//).length > 2) {
                 delim = '/';
-                splitRegex = /(?<!:)\//;
+                splitRegex = /(?<!:)\/(?!\d)/;
             } else if (line.includes(' | ')) {
                 delim = '|';
                 splitRegex = /\s*\|\s*/;
