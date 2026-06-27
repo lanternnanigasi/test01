@@ -1737,19 +1737,30 @@ function parseMarkdownTable(markdown) {
             if (!line) continue;
             
             let delim = null;
-            if (line.startsWith('/') || line.includes(' / ') || line.split('/').length > 3) {
+            let splitRegex = null;
+
+            if (line.includes(' / ')) {
                 delim = '/';
-            } else if (line.startsWith('|') || line.includes(' | ') || line.split('|').length > 3) {
+                splitRegex = /\s*\/\s*/;
+            } else if (line.startsWith('/') && line.split(/(?<!:)\//).length > 2) {
+                delim = '/';
+                splitRegex = /(?<!:)\//;
+            } else if (line.includes(' | ')) {
                 delim = '|';
+                splitRegex = /\s*\|\s*/;
+            } else if (line.startsWith('|') && line.split('|').length > 2) {
+                delim = '|';
+                splitRegex = /\|/;
             }
+            
             if (!delim) continue;
             
             const escapeRegex = (s) => s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
             const escapedDelim = escapeRegex(delim);
-            const stripRegex = new RegExp(`^${escapedDelim}|${escapedDelim}$`, 'g');
+            const stripRegex = new RegExp(`^\\s*${escapedDelim}|${escapedDelim}\\s*$`, 'g');
             
             const cleanLine = line.replace(stripRegex, '');
-            const cells = cleanLine.split(delim).map(c => c.replace(/\*\*/g, '').trim());
+            const cells = cleanLine.split(splitRegex).map(c => c.replace(/\*\*/g, '').trim());
             
             let parsedResume = "";
             let parsedMemo = "";
@@ -1826,7 +1837,12 @@ function parseMarkdownTable(markdown) {
             if (!line.startsWith(delimiter)) continue;
             
             const cleanLine = line.replace(stripRegex, '');
-            const cells = cleanLine.split(delimiter).map(c => c.replace(/\*\*/g, '').trim());
+            let cells = [];
+            if (delimiter === '/') {
+                cells = cleanLine.split(/(?<!:)\//).map(c => c.replace(/\*\*/g, '').trim());
+            } else {
+                cells = cleanLine.split(delimiter).map(c => c.replace(/\*\*/g, '').trim());
+            }
             if (cells.length >= 2) {
                 const cleanH = cells[0].trim();
                 if (cleanH && !/^[-:\s]+$/.test(cleanH) && !['項目', '調査結果', '内容'].includes(cleanH)) {
@@ -1842,7 +1858,13 @@ function parseMarkdownTable(markdown) {
             if (!line.startsWith(delimiter)) continue;
             
             const cleanLine = line.replace(stripRegex, '');
-            const cells = cleanLine.split(delimiter).map(c => c.replace(/\*\*/g, '').trim());
+            let cells = [];
+            if (delimiter === '/') {
+                // To avoid splitting 'https://', split by slash not preceded by a colon
+                cells = cleanLine.split(/(?<!:)\//).map(c => c.replace(/\*\*/g, '').trim());
+            } else {
+                cells = cleanLine.split(delimiter).map(c => c.replace(/\*\*/g, '').trim());
+            }
             
             let parsedResume = "";
             let parsedColor = "";
