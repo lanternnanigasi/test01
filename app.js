@@ -171,7 +171,7 @@ const calendarSection = document.getElementById('calendar-section');
 const calendarEl = document.getElementById('calendar');
 
 // Version Check
-console.log("【就活メモ】 アプリバージョン: v1.9.1 (2026-06-28 調査対象の個別コンテキスト指定・AI評価精度向上版)");
+console.log("【就活メモ】 アプリバージョン: v1.11.0 (2026-06-28 カスタムプルダウン・企業備考・AI区切り文字対応版)");
 
 // State
 let isSignupMode = false;
@@ -185,6 +185,7 @@ let currentData = [];
 let calendarInstance = null;
 let hiddenColumns = [];
 let customColumnSettings = { order: [], widths: {} };
+let customDropdownsData = [];
 
 // Hide auth warning if Firebase is configured
 if (auth) {
@@ -712,7 +713,8 @@ function listenToImportQueue() {
                     } catch (e) {
                         console.error("Failed to parse import queue item:", e);
                         console.error("【AIの出力内容（RAW）】\n", docData.rawText);
-                        await updateDoc(doc(db, "users", auth.currentUser.uid, "importQueue", change.doc.id), { status: "error", error: e.message });
+                        // Makeからの不要なデータが残らないよう、パースエラー時はキューから削除する
+                        await deleteDoc(doc(db, "users", auth.currentUser.uid, "importQueue", change.doc.id));
                     }
                 }
             }
@@ -867,6 +869,23 @@ function saveColumnSettingsAsync() {
                 await setDoc(docRef, { data: dataStr }, { merge: true });
             } catch (e) {
                 console.warn("Failed to save customColumnSettings:", e);
+            }
+        }
+    }, 1000);
+}
+
+let customDropdownsSaveTimeout;
+function saveCustomDropdownsAsync() {
+    clearTimeout(customDropdownsSaveTimeout);
+    customDropdownsSaveTimeout = setTimeout(async () => {
+        const dataStr = JSON.stringify(customDropdownsData);
+        localStorage.setItem('customDropdownsData', dataStr);
+        if (auth && auth.currentUser) {
+            try {
+                const docRef = doc(db, "users", auth.currentUser.uid, "settings", "customDropdownsData");
+                await setDoc(docRef, { data: dataStr }, { merge: true });
+            } catch (e) {
+                console.warn("Failed to save customDropdownsData:", e);
             }
         }
     }, 1000);
@@ -1059,8 +1078,7 @@ function renderFormatArchives() {
     
     if (formatArchives.length === 0) {
         list.innerHTML = "<p style='color: var(--text-color); opacity: 0.7;'>保存されたアーカイブはありません。</p>";
-        return;
-    }
+    } else {
 
     formatArchives.forEach((arch, index) => {
         const div = document.createElement('div');
@@ -1138,6 +1156,7 @@ function renderFormatArchives() {
         div.appendChild(btnGroup);
         list.appendChild(div);
     });
+    }
 
     const apiSelect = document.getElementById('api-format-select');
     if (apiSelect) {
@@ -1183,6 +1202,121 @@ const availableColors = [
     {val: 'blue', label: '青色'}, {val: 'indigo', label: '藍色'}, {val: 'violet', label: '紫色'},
     {val: 'magenta', label: '赤紫(マゼンタ)'}, {val: 'pink', label: 'ピンク'}, {val: 'gray', label: '灰色'}
 ];
+
+function renderCustomDropdownBuilder() {
+    const list = document.getElementById('custom-dropdowns-list');
+    if (!list) return;
+    list.innerHTML = "";
+    customDropdownsData.forEach((dd, ddIdx) => {
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.flexDirection = 'column';
+        row.style.gap = '8px';
+        row.style.padding = '8px';
+        row.style.border = '1px solid var(--border-color)';
+        row.style.borderRadius = '4px';
+
+        const topRow = document.createElement('div');
+        topRow.style.display = 'flex';
+        topRow.style.gap = '8px';
+        topRow.style.alignItems = 'center';
+
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.placeholder = 'プルダウン名 (例: 就活ステータス)';
+        nameInput.value = dd.name || "";
+        nameInput.style.flex = "1";
+        nameInput.style.padding = "6px";
+        nameInput.style.fontSize = "0.9rem";
+        nameInput.addEventListener('input', (e) => {
+            dd.name = e.target.value;
+            saveCustomDropdownsAsync();
+            renderFormatBuilder();
+        });
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'icon-btn';
+        delBtn.textContent = '✕';
+        delBtn.style.color = 'var(--danger)';
+        delBtn.onclick = () => {
+            if (confirm(`「${dd.name || "無題のプルダウン"}」を削除しますか？`)) {
+                customDropdownsData.splice(ddIdx, 1);
+                saveCustomDropdownsAsync();
+                renderCustomDropdownBuilder();
+                renderFormatBuilder();
+            }
+        };
+
+        topRow.appendChild(nameInput);
+        topRow.appendChild(delBtn);
+        row.appendChild(topRow);
+
+        const optionsDiv = document.createElement('div');
+        optionsDiv.style.display = 'flex';
+        optionsDiv.style.flexDirection = 'column';
+        optionsDiv.style.gap = '4px';
+        optionsDiv.style.marginLeft = '12px';
+
+        if (!dd.options) dd.options = [];
+        dd.options.forEach((opt, optIdx) => {
+            const optRow = document.createElement('div');
+            optRow.style.display = 'flex';
+            optRow.style.gap = '8px';
+            optRow.style.alignItems = 'center';
+
+            const optInput = document.createElement('input');
+            optInput.type = 'text';
+            optInput.placeholder = '選択肢 (例: エントリー前)';
+            optInput.value = opt;
+            optInput.style.flex = "1";
+            optInput.style.padding = "4px";
+            optInput.style.fontSize = "0.85rem";
+            optInput.addEventListener('input', (e) => {
+                dd.options[optIdx] = e.target.value;
+                saveCustomDropdownsAsync();
+            });
+
+            const optDelBtn = document.createElement('button');
+            optDelBtn.className = 'icon-btn';
+            optDelBtn.textContent = '✕';
+            optDelBtn.style.fontSize = '0.7rem';
+            optDelBtn.onclick = () => {
+                dd.options.splice(optIdx, 1);
+                saveCustomDropdownsAsync();
+                renderCustomDropdownBuilder();
+            };
+
+            optRow.appendChild(optInput);
+            optRow.appendChild(optDelBtn);
+            optionsDiv.appendChild(optRow);
+        });
+
+        const addOptBtn = document.createElement('button');
+        addOptBtn.className = 'btn text';
+        addOptBtn.textContent = '+ 選択肢を追加';
+        addOptBtn.style.fontSize = '0.8rem';
+        addOptBtn.style.textAlign = 'left';
+        addOptBtn.style.padding = '4px 8px';
+        addOptBtn.onclick = () => {
+            dd.options.push("");
+            saveCustomDropdownsAsync();
+            renderCustomDropdownBuilder();
+        };
+
+        row.appendChild(optionsDiv);
+        row.appendChild(addOptBtn);
+        list.appendChild(row);
+    });
+}
+
+const addCustomDropdownBtn = document.getElementById('add-custom-dropdown-btn');
+if (addCustomDropdownBtn) {
+    addCustomDropdownBtn.addEventListener('click', () => {
+        customDropdownsData.push({ id: Date.now() + Math.random(), name: "", options: [""] });
+        saveCustomDropdownsAsync();
+        renderCustomDropdownBuilder();
+    });
+}
 
 function renderFormatBuilder() {
     formatItemsList.innerHTML = "";
@@ -1339,7 +1473,8 @@ function renderFormatBuilder() {
                     {val: "rule", label: "📝 ルール"},
                     {val: "calendar", label: "📅 カレンダー追加"},
                     {val: "memo", label: "📝 メモ追加"},
-                    {val: "rewrite", label: "✨ 自己PR等リライト"}
+                    {val: "rewrite", label: "✨ 自己PR等リライト"},
+                    {val: "dropdown", label: "🎛 カスタムプルダウン"}
                 ];
                 types.forEach(t => {
                     const opt = document.createElement('option');
@@ -1411,6 +1546,29 @@ function renderFormatBuilder() {
                             saveFormatBuilderDataAsync();
                         });
                         extraDiv.appendChild(varInput);
+                    } else if (attr.type === "dropdown") {
+                        const ddSelect = document.createElement('select');
+                        ddSelect.style.fontSize = "0.85rem";
+                        ddSelect.style.padding = "4px";
+                        
+                        const defaultOpt = document.createElement('option');
+                        defaultOpt.value = "";
+                        defaultOpt.textContent = "カスタムプルダウンを選択...";
+                        ddSelect.appendChild(defaultOpt);
+                        
+                        customDropdownsData.forEach(dd => {
+                            const opt = document.createElement('option');
+                            opt.value = dd.id;
+                            opt.textContent = dd.name || "(無題のプルダウン)";
+                            if (attr.dropdownId === dd.id) opt.selected = true;
+                            ddSelect.appendChild(opt);
+                        });
+                        
+                        ddSelect.addEventListener('change', (e) => {
+                            attr.dropdownId = e.target.value;
+                            saveFormatBuilderDataAsync();
+                        });
+                        extraDiv.appendChild(ddSelect);
                     } else if (attr.type === "rule") {
                         const ruleInput = document.createElement('input');
                         ruleInput.type = 'text';
@@ -1559,6 +1717,9 @@ async function loadSettings() {
                 if (d.id === "customColumnSettings" && d.data().data) {
                     customColumnSettings = JSON.parse(d.data().data);
                 }
+                if (d.id === "customDropdownsData" && d.data().data) {
+                    customDropdownsData = JSON.parse(d.data().data);
+                }
             });
         } catch (e) {
             console.error(e);
@@ -1575,6 +1736,9 @@ async function loadSettings() {
 
         const savedCols = localStorage.getItem('customColumnSettings');
         if (savedCols) customColumnSettings = JSON.parse(savedCols);
+
+        const savedDropdowns = localStorage.getItem('customDropdownsData');
+        if (savedDropdowns) customDropdownsData = JSON.parse(savedDropdowns);
     }
 
     if (formatBuilderData.length === 0) {
@@ -1587,6 +1751,7 @@ async function loadSettings() {
         });
     }
 
+    renderCustomDropdownBuilder();
     renderFormatBuilder();
     renderEventTypes();
     updateCalendarModalTypeSelect();
@@ -1740,6 +1905,11 @@ function buildPromptString(itemsList, esEnabled, isApiMode = false, checkedItems
                 } else if (attr.type === "rewrite" && esEnabled) {
                     const charRule = attr.charLimit ? `（${attr.charLimit}文字以内で）` : ``;
                     prompt += `  [最重要: ES添削機能] 企業の求める人物像や特徴と、ユーザーの「${attr.targetField}」の内容を結びつけ、この企業専用に内容を高度に添削・リライトしてください。リライトした内容は${charRule}必ずセルの末尾に「 [[memo_${attr.targetField}添削: (リライト内容)]] 」の形式で出力してください。これを行わないとシステムが致命的なエラーを起こします。\n`;
+                } else if (attr.type === "dropdown") {
+                    const dd = customDropdownsData.find(d => d.id === attr.dropdownId);
+                    if (dd && dd.options && dd.options.length > 0) {
+                        prompt += `  [厳守: 選択式の指定] この項目の値は、必ず以下のいずれかから1つだけを選んで出力してください。それ以外の出力は絶対に禁止です。[ ${dd.options.join(', ')} ]\n`;
+                    }
                 }
             });
         }
@@ -1756,12 +1926,12 @@ function buildPromptString(itemsList, esEnabled, isApiMode = false, checkedItems
     prompt += `\n【最終出力フォーマットの厳格な制約】\n`;
     prompt += `・Markdownの表形式（|---|やヘッダー）は絶対に生成しないでください。システムが破壊されます。\n`;
     prompt += `・必ず「/」で情報が区切られた1行のデータ行のみを出力してください。\n`;
-    prompt += `・【最重要】複数企業のデータを出力する場合、各企業データの末尾（行の終わり）に必ず「 //END// 」という記号を記載してください。（例: / 企業名 / ... / //END// ）\n`;
+    prompt += `・【最重要】複数企業のデータを出力する場合、各企業データの末尾（行の終わり）に必ず「 ]@[ 」という記号を記載してください。（例: / 企業名 / ... / ]@[ ）\n`;
     prompt += `・前置き、挨拶、説明などのテキストは一切出力しないでください。\n`;
     if (isApiMode) {
         prompt += `・無効なメールの場合は、「無効なスカウトメール」とだけ出力し、絶対にデータ行を作らないでください。\n\n`;
     }
-    prompt += `[出力形式の例]\n/ A株式会社 / IT / (項目内容) / ... / 求める人物像です。 [[color:red]] [[memo_自己PR添削: ...]] / //END//\n\n`;
+    prompt += `[出力形式の例]\n/ A株式会社 / IT / (項目内容) / ... / 求める人物像です。 [[color:red]] [[memo_自己PR添削: ...]] / ]@[ \n\n`;
     
     if (isApiMode) {
         prompt += `【API自動処理時の特別指示：トークン節約と調査徹底】\n`;
@@ -1902,6 +2072,7 @@ generateFormatBtn.addEventListener('click', async () => {
                 targetCompaniesFormatted += `  前提条件・備考: ${t.context}\n`;
             }
         });
+        basePrompt += `\n【調査対象企業と前提条件】\n以下の企業について、指定された前提条件（どの部署・条件の募集か等）に基づいて調査を行ってください。不明な場合は「不明」としてください。\n${targetCompaniesFormatted}\n`;
     }
     
     // Split logic
@@ -2104,8 +2275,8 @@ function parseMarkdownTable(markdown) {
         return match.replace(/\n/g, '<br>');
     });
 
-    // //END// を改行に変換して確実な行区切りを行う
-    markdown = markdown.replace(/\/\/END\/\//g, '\n');
+    // ]@[ を改行に変換して確実な行区切りを行う
+    markdown = markdown.replace(/\]@\[/g, '\n');
 
     const lines = markdown.trim().split('\n');
     
@@ -2594,6 +2765,11 @@ function renderQueryBuilder() {
         
         // Value Input / Select
         let valInput;
+        
+        const fbItem = formatBuilderData.find(d => d.name === row.field);
+        const ddAttr = fbItem && fbItem.attributes ? fbItem.attributes.find(a => a.type === "dropdown") : null;
+        const ddData = ddAttr ? customDropdownsData.find(d => d.id === ddAttr.dropdownId) : null;
+
         if (row.field === "_tags") {
             valInput = document.createElement('select');
             valInput.style.padding = '4px';
@@ -2604,6 +2780,20 @@ function renderQueryBuilder() {
                 opt.value = tag;
                 opt.textContent = tag;
                 if (row.value === tag) opt.selected = true;
+                valInput.appendChild(opt);
+            });
+            valInput.addEventListener('change', (e) => { row.value = e.target.value; });
+        } else if (ddData) {
+            valInput = document.createElement('select');
+            valInput.style.padding = '4px';
+            valInput.style.flex = '1';
+            valInput.innerHTML = `<option value="">(選択してください)</option>`;
+            ddData.options.forEach(optVal => {
+                if (!optVal.trim()) return;
+                const opt = document.createElement('option');
+                opt.value = optVal;
+                opt.textContent = optVal;
+                if (row.value === optVal) opt.selected = true;
                 valInput.appendChild(opt);
             });
             valInput.addEventListener('change', (e) => { row.value = e.target.value; });
@@ -3238,7 +3428,56 @@ function renderTable(data) {
                     td.style.display = 'none';
                 }
 
-                let text = String(item[h] || "-");
+                // Check if this column is a custom dropdown
+                const fbItem = formatBuilderData.find(d => d.name === h);
+                const ddAttr = fbItem && fbItem.attributes ? fbItem.attributes.find(a => a.type === "dropdown") : null;
+                const ddData = ddAttr ? customDropdownsData.find(d => d.id === ddAttr.dropdownId) : null;
+
+                if (ddData) {
+                    const sel = document.createElement('select');
+                    sel.style.width = "100%";
+                    sel.style.padding = "6px 4px";
+                    sel.style.borderRadius = "4px";
+                    sel.style.border = "1px solid var(--border-color)";
+                    sel.style.background = "var(--bg-color)";
+                    sel.style.color = "var(--text-color)";
+                    sel.style.fontSize = "0.9rem";
+                    sel.style.fontWeight = "bold";
+                    
+                    const defaultOpt = document.createElement('option');
+                    defaultOpt.value = "";
+                    defaultOpt.textContent = "-";
+                    sel.appendChild(defaultOpt);
+
+                    let currentValue = (item[h] || "").replace(/(?:<!--|\[\[)[\s\S]*?(?:-->|\]\])/g, "").trim();
+
+                    ddData.options.forEach(optVal => {
+                        if (!optVal.trim()) return;
+                        const opt = document.createElement('option');
+                        opt.value = optVal;
+                        opt.textContent = optVal;
+                        if (currentValue === optVal) opt.selected = true;
+                        sel.appendChild(opt);
+                    });
+
+                    // If current value is not in options, add it temporarily so it's not lost
+                    if (currentValue && currentValue !== "-" && currentValue !== "不明" && !ddData.options.includes(currentValue)) {
+                        const opt = document.createElement('option');
+                        opt.value = currentValue;
+                        opt.textContent = currentValue + " (未定義)";
+                        opt.selected = true;
+                        sel.appendChild(opt);
+                    }
+
+                    sel.addEventListener('change', (e) => {
+                        e.stopPropagation();
+                        // Preserve original system tags if they existed? No, dropdown overwrites it simply.
+                        updateItemData(item.id, { [h]: e.target.value });
+                    });
+                    
+                    td.appendChild(sel);
+                } else {
+                    let text = String(item[h] || "-");
                 
                 let bgColorClass = "";
                 if (text.includes("<!-- color:green -->") || text.includes("[[color:green]]")) bgColorClass = "bg-green";
@@ -3401,6 +3640,7 @@ function renderTable(data) {
                     if (window.isDraggingTable) return;
                     contentDiv.classList.toggle('expanded');
                 });
+                } // End of dropdown else
             }
             tr.appendChild(td);
         });

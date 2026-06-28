@@ -50,6 +50,22 @@
         <div id="db-section" class="container">
             <!-- Alarm Container -->
             <div id="alarm-container" style="margin-bottom: 16px;"></div>
+            <!-- Custom Dropdowns Section -->
+            <details class="glass-card dropdowns-section" style="margin-bottom: 16px; padding: 16px; border-left: 4px solid #8b5cf6;">
+                <summary style="font-size: 1.2rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                    <span class="accordion-arrow">▶</span> 🎛 カスタムプルダウン（進捗・ステータス等）の作成
+                </summary>
+                <div style="margin-top: 16px;">
+                    <p style="font-size: 0.85rem; color: var(--text-color); opacity: 0.8; margin-bottom: 12px;">
+                        表内で直接選択できるプルダウン（例：「就活ステータス」「志望度」など）を作成できます。作成したプルダウンは、下のフォーマット作成の「属性を追加」から選べるようになります。
+                    </p>
+                    <div id="custom-dropdowns-list" style="display: flex; flex-direction: column; gap: 16px;">
+                        <!-- JSで動的に追加されます -->
+                    </div>
+                    <button id="add-custom-dropdown-btn" class="btn text" style="margin-top: 12px; padding: 6px 12px; border: 1px dashed #8b5cf6; color: #8b5cf6;">+ プルダウンを新規作成</button>
+                </div>
+            </details>
+
             <!-- Format Generator Section -->
             <details class="glass-card format-section" style="margin-bottom: 24px; padding: 16px;">
                 <summary style="font-size: 1.2rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px;">
