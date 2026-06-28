@@ -171,7 +171,7 @@ const calendarSection = document.getElementById('calendar-section');
 const calendarEl = document.getElementById('calendar');
 
 // Version Check
-console.log("【就活メモ】 アプリバージョン: v1.13.0 (2026-06-28 企業数指定・就活の軸改善・プロンプト圧縮版)");
+console.log("【就活メモ】 アプリバージョン: v1.14.0 (2026-06-28 プロンプト分割・文字数と企業数の積条件対応版)");
 
 // State
 let isSignupMode = false;
@@ -2125,6 +2125,9 @@ generateFormatBtn.addEventListener('click', async () => {
     const isEsEnabled = globalEsToggle ? globalEsToggle.checked : false;
     const basePrompt = buildPromptString(formatBuilderData, isEsEnabled, false);
     
+    const charLimitInput = document.getElementById('manual-char-limit');
+    const charLimit = charLimitInput && charLimitInput.value ? parseInt(charLimitInput.value, 10) : 2000;
+    
     const chunkSizeInput = document.getElementById('manual-chunk-size');
     const chunkSize = chunkSizeInput && chunkSizeInput.value ? parseInt(chunkSizeInput.value, 10) : 5;
     
@@ -2134,25 +2137,47 @@ generateFormatBtn.addEventListener('click', async () => {
     if (validTargets.length === 0) {
         chunks.push(basePrompt + `\n\n【調査対象企業】\n(※ここに企業名を入力してください)\n以上について、指定のフォーマットで調査・出力してください。`);
     } else {
-        for (let i = 0; i < validTargets.length; i += chunkSize) {
-            const batch = validTargets.slice(i, i + chunkSize);
+        let currentBatch = [];
+        let isFirstChunk = true;
+        const overheadLength = 200; // ヘッダーなどの余裕分
+        
+        const createChunkStr = (isFirst, batch) => {
             let batchStr = "";
-            batch.forEach(t => {
-                batchStr += `- 企業名: ${t.name}\n`;
-                if (t.context && t.context.trim() !== "") {
-                    batchStr += `  前提条件・備考: ${t.context}\n`;
+            batch.forEach(b => {
+                batchStr += `- 企業名: ${b.name}\n`;
+                if (b.context && b.context.trim() !== "") {
+                    batchStr += `  前提条件・備考: ${b.context}\n`;
                 }
             });
-            
-            if (i === 0) {
-                // 1つ目のプロンプトは完全な指示を含める
-                const chunkPrompt = basePrompt + `\n\n【調査対象企業と個別の前提条件】\n以下の企業について、指定された前提条件（どの部署・条件の募集か等）に基づいて調査を行い、指定のフォーマットで出力してください。不明な場合は「不明」としてください。\n\n${batchStr}`;
-                chunks.push(chunkPrompt);
+            if (isFirst) {
+                return basePrompt + `\n\n【調査対象企業と個別の前提条件】\n以下の企業について、指定された前提条件（どの部署・条件の募集か等）に基づいて調査を行い、指定のフォーマットで出力してください。不明な場合は「不明」としてください。\n\n${batchStr}`;
             } else {
-                // 2つ目以降は指示を大幅に省略（同じAIセッションを想定）
-                const shortPrompt = `引き続き、以下の企業について先ほどと全く同じルール・フォーマットで調査・出力してください。各企業の行末には必ず「 ]@[ 」を付けることを忘れないでください。不明な場合は「不明」としてください。\n\n${batchStr}`;
-                chunks.push(shortPrompt);
+                return `引き続き、以下の企業について先ほどと全く同じルール・フォーマットで調査・出力してください。各企業の行末には必ず「 ]@[ 」を付けることを忘れないでください。不明な場合は「不明」としてください。\n\n${batchStr}`;
             }
+        };
+
+        let currentBaseLength = isFirstChunk ? basePrompt.length : 150;
+        
+        validTargets.forEach(t => {
+            const compStr = `- 企業名: ${t.name}\n` + (t.context && t.context.trim() !== "" ? `  前提条件・備考: ${t.context}\n` : "");
+            
+            // 【積条件】企業数上限に達する か、文字数上限に達する か、どちらかで分割
+            if (currentBatch.length >= chunkSize || 
+                (currentBatch.length > 0 && (currentBaseLength + compStr.length + overheadLength) > charLimit)) {
+                
+                chunks.push(createChunkStr(isFirstChunk, currentBatch));
+                
+                isFirstChunk = false;
+                currentBatch = [];
+                currentBaseLength = 150; // 次は2つ目以降なので短い
+            }
+            
+            currentBatch.push(t);
+            currentBaseLength += compStr.length;
+        });
+        
+        if (currentBatch.length > 0) {
+            chunks.push(createChunkStr(isFirstChunk, currentBatch));
         }
     }
     
