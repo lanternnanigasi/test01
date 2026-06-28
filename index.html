@@ -111,10 +111,10 @@
                     <div style="margin-top: 16px; background: rgba(0,0,0,0.03); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
                         <h4 style="margin-top: 0; margin-bottom: 8px; font-size: 0.95rem;">手動調査用 企業マスター表 (選択した企業のみプロンプトに含まれます)</h4>
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                            <label style="font-size: 0.85rem; color: var(--text-color);">※同じ企業を毎回入力する手間を省けます。指定した文字数を超えないようにプロンプトが自動分割されます。</label>
+                            <label style="font-size: 0.85rem; color: var(--text-color);">※指定した企業数ごとにプロンプトが自動分割されます。</label>
                             <div style="display: flex; align-items: center; gap: 8px;">
-                                <label style="font-size: 0.8rem;">1プロンプトの最大文字数目安:</label>
-                                <input type="number" id="manual-char-limit" value="2000" step="500" min="500" style="width: 80px; padding: 4px; border-radius: 4px; border: 1px solid var(--border-color); font-size: 0.85rem;">
+                                <label style="font-size: 0.8rem;">1プロンプトの調査企業数:</label>
+                                <input type="number" id="manual-chunk-size" value="5" step="1" min="1" max="20" style="width: 60px; padding: 4px; border-radius: 4px; border: 1px solid var(--border-color); font-size: 0.85rem;">
                                 <button id="toggle-all-target-companies-btn" class="btn text" style="font-size: 0.8rem; padding: 4px 8px; border: 1px solid var(--border-color); margin-left: 8px;">☑ 全選択 / 全解除</button>
                             </div>
                         </div>

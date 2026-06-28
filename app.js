@@ -171,7 +171,7 @@ const calendarSection = document.getElementById('calendar-section');
 const calendarEl = document.getElementById('calendar');
 
 // Version Check
-console.log("【就活メモ】 アプリバージョン: v1.12.0 (2026-06-28 企業マスター機能・分割文字数調整対応版)");
+console.log("【就活メモ】 アプリバージョン: v1.13.0 (2026-06-28 企業数指定・就活の軸改善・プロンプト圧縮版)");
 
 // State
 let isSignupMode = false;
@@ -1867,7 +1867,7 @@ function buildPromptString(itemsList, esEnabled, isApiMode = false, checkedItems
     const coreValuesText = coreValuesEl ? coreValuesEl.value.trim() : "";
     const validAccountData = typeof accountData !== 'undefined' ? accountData.filter(a => a.title && a.value && a.value.trim() !== "") : [];
     
-    prompt += `【ユーザーの基本情報・就活の軸】\n以下の『就活の軸』と『各企業の前提条件』を照らし合わせ、あなたなりの客観的な評価（おすすめ度やマッチ度など）を行ってください。\n\n`;
+    prompt += `【最重要: ユーザーの基本情報・就活の軸の反映】\n以下の『就活の軸』と『各企業の前提条件』を照らし合わせ、企業調査の評価基準として【必ず】用いてください。抽出項目の中に「おすすめ度」「マッチ度」「懸念点」等の評価や所感を求める項目がある場合、必ずこの『就活の軸』とどの程度合致しているかという観点で内容を生成・反映させてください。\n\n`;
     if (coreValuesText) {
         prompt += `- 就活の軸 (絶対に譲れないこと等):\n${coreValuesText}\n\n`;
     } else {
@@ -2125,8 +2125,8 @@ generateFormatBtn.addEventListener('click', async () => {
     const isEsEnabled = globalEsToggle ? globalEsToggle.checked : false;
     const basePrompt = buildPromptString(formatBuilderData, isEsEnabled, false);
     
-    const charLimitInput = document.getElementById('manual-char-limit');
-    const limit = charLimitInput && charLimitInput.value ? parseInt(charLimitInput.value, 10) : 2000;
+    const chunkSizeInput = document.getElementById('manual-chunk-size');
+    const chunkSize = chunkSizeInput && chunkSizeInput.value ? parseInt(chunkSizeInput.value, 10) : 5;
     
     const validTargets = targetCompanyMasterData.filter(t => t.selected && t.name.trim() !== "");
     let chunks = [];
@@ -2134,42 +2134,25 @@ generateFormatBtn.addEventListener('click', async () => {
     if (validTargets.length === 0) {
         chunks.push(basePrompt + `\n\n【調査対象企業】\n(※ここに企業名を入力してください)\n以上について、指定のフォーマットで調査・出力してください。`);
     } else {
-        let currentBatch = [];
-        let currentLength = basePrompt.length;
-        const overheadLength = 200; // ヘッダーなどの余裕分
-        
-        validTargets.forEach(t => {
-            const compStr = `- 企業名: ${t.name}\n` + (t.context && t.context.trim() !== "" ? `  前提条件・備考: ${t.context}\n` : "");
-            
-            if (currentBatch.length > 0 && (currentLength + compStr.length + overheadLength) > limit) {
-                let batchStr = "";
-                currentBatch.forEach(b => {
-                    batchStr += `- 企業名: ${b.name}\n`;
-                    if (b.context && b.context.trim() !== "") {
-                        batchStr += `  前提条件・備考: ${b.context}\n`;
-                    }
-                });
-                const chunkPrompt = basePrompt + `\n\n【調査対象企業と個別の前提条件】\n以下の企業について、指定された前提条件（どの部署・条件の募集か等）に基づいて調査を行い、指定のフォーマットで出力してください。不明な場合は「不明」としてください。\n\n${batchStr}`;
-                chunks.push(chunkPrompt);
-                
-                currentBatch = [];
-                currentLength = basePrompt.length;
-            }
-            
-            currentBatch.push(t);
-            currentLength += compStr.length;
-        });
-        
-        if (currentBatch.length > 0) {
+        for (let i = 0; i < validTargets.length; i += chunkSize) {
+            const batch = validTargets.slice(i, i + chunkSize);
             let batchStr = "";
-            currentBatch.forEach(b => {
-                batchStr += `- 企業名: ${b.name}\n`;
-                if (b.context && b.context.trim() !== "") {
-                    batchStr += `  前提条件・備考: ${b.context}\n`;
+            batch.forEach(t => {
+                batchStr += `- 企業名: ${t.name}\n`;
+                if (t.context && t.context.trim() !== "") {
+                    batchStr += `  前提条件・備考: ${t.context}\n`;
                 }
             });
-            const chunkPrompt = basePrompt + `\n\n【調査対象企業と個別の前提条件】\n以下の企業について、指定された前提条件（どの部署・条件の募集か等）に基づいて調査を行い、指定のフォーマットで出力してください。不明な場合は「不明」としてください。\n\n${batchStr}`;
-            chunks.push(chunkPrompt);
+            
+            if (i === 0) {
+                // 1つ目のプロンプトは完全な指示を含める
+                const chunkPrompt = basePrompt + `\n\n【調査対象企業と個別の前提条件】\n以下の企業について、指定された前提条件（どの部署・条件の募集か等）に基づいて調査を行い、指定のフォーマットで出力してください。不明な場合は「不明」としてください。\n\n${batchStr}`;
+                chunks.push(chunkPrompt);
+            } else {
+                // 2つ目以降は指示を大幅に省略（同じAIセッションを想定）
+                const shortPrompt = `引き続き、以下の企業について先ほどと全く同じルール・フォーマットで調査・出力してください。各企業の行末には必ず「 ]@[ 」を付けることを忘れないでください。不明な場合は「不明」としてください。\n\n${batchStr}`;
+                chunks.push(shortPrompt);
+            }
         }
     }
     
