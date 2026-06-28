@@ -2125,23 +2125,50 @@ generateFormatBtn.addEventListener('click', async () => {
     const isEsEnabled = globalEsToggle ? globalEsToggle.checked : false;
     const basePrompt = buildPromptString(formatBuilderData, isEsEnabled, false);
     
+    const charLimitInput = document.getElementById('manual-char-limit');
+    const limit = charLimitInput && charLimitInput.value ? parseInt(charLimitInput.value, 10) : 2000;
+    
     const validTargets = targetCompanyMasterData.filter(t => t.selected && t.name.trim() !== "");
     let chunks = [];
     
     if (validTargets.length === 0) {
         chunks.push(basePrompt + `\n\n【調査対象企業】\n(※ここに企業名を入力してください)\n以上について、指定のフォーマットで調査・出力してください。`);
     } else {
-        const CHUNK_SIZE = 5;
-        for (let i = 0; i < validTargets.length; i += CHUNK_SIZE) {
-            const batch = validTargets.slice(i, i + CHUNK_SIZE);
-            let compStr = "";
-            batch.forEach(t => {
-                compStr += `- 企業名: ${t.name}\n`;
-                if (t.context && t.context.trim() !== "") {
-                    compStr += `  前提条件・備考: ${t.context}\n`;
+        let currentBatch = [];
+        let currentLength = basePrompt.length;
+        const overheadLength = 200; // ヘッダーなどの余裕分
+        
+        validTargets.forEach(t => {
+            const compStr = `- 企業名: ${t.name}\n` + (t.context && t.context.trim() !== "" ? `  前提条件・備考: ${t.context}\n` : "");
+            
+            if (currentBatch.length > 0 && (currentLength + compStr.length + overheadLength) > limit) {
+                let batchStr = "";
+                currentBatch.forEach(b => {
+                    batchStr += `- 企業名: ${b.name}\n`;
+                    if (b.context && b.context.trim() !== "") {
+                        batchStr += `  前提条件・備考: ${b.context}\n`;
+                    }
+                });
+                const chunkPrompt = basePrompt + `\n\n【調査対象企業と個別の前提条件】\n以下の企業について、指定された前提条件（どの部署・条件の募集か等）に基づいて調査を行い、指定のフォーマットで出力してください。不明な場合は「不明」としてください。\n\n${batchStr}`;
+                chunks.push(chunkPrompt);
+                
+                currentBatch = [];
+                currentLength = basePrompt.length;
+            }
+            
+            currentBatch.push(t);
+            currentLength += compStr.length;
+        });
+        
+        if (currentBatch.length > 0) {
+            let batchStr = "";
+            currentBatch.forEach(b => {
+                batchStr += `- 企業名: ${b.name}\n`;
+                if (b.context && b.context.trim() !== "") {
+                    batchStr += `  前提条件・備考: ${b.context}\n`;
                 }
             });
-            const chunkPrompt = basePrompt + `\n\n【調査対象企業と個別の前提条件】\n以下の企業について、指定された前提条件（どの部署・条件の募集か等）に基づいて調査を行い、指定のフォーマットで出力してください。不明な場合は「不明」としてください。\n\n${compStr}`;
+            const chunkPrompt = basePrompt + `\n\n【調査対象企業と個別の前提条件】\n以下の企業について、指定された前提条件（どの部署・条件の募集か等）に基づいて調査を行い、指定のフォーマットで出力してください。不明な場合は「不明」としてください。\n\n${batchStr}`;
             chunks.push(chunkPrompt);
         }
     }
