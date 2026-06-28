@@ -1720,7 +1720,16 @@ async function loadSettings() {
                 if (d.id === "customDropdownsData" && d.data().data) {
                     customDropdownsData = JSON.parse(d.data().data);
                 }
+                if (d.id === "targetCompanyMasterData" && d.data().data) {
+                    targetCompanyMasterData = JSON.parse(d.data().data);
+                    renderTargetCompanyMaster();
+                }
             });
+            // ユーザーがローカルで1時間かけて作成したデータをクラウドに初回同期するための安全策
+            if (targetCompanyMasterData && targetCompanyMasterData.length > 0) {
+                const docRef = doc(db, "users", auth.currentUser.uid, "settings", "targetCompanyMasterData");
+                setDoc(docRef, { data: JSON.stringify(targetCompanyMasterData) }, { merge: true });
+            }
         } catch (e) {
             console.error(e);
         }
@@ -2034,8 +2043,21 @@ function renderTargetCompanyMaster() {
     });
 }
 
+let targetCompanyMasterSaveTimeout;
 function saveTargetCompanyMaster() {
-    localStorage.setItem('targetCompanyMasterData', JSON.stringify(targetCompanyMasterData));
+    clearTimeout(targetCompanyMasterSaveTimeout);
+    targetCompanyMasterSaveTimeout = setTimeout(async () => {
+        const dataStr = JSON.stringify(targetCompanyMasterData);
+        localStorage.setItem('targetCompanyMasterData', dataStr);
+        if (auth && auth.currentUser) {
+            try {
+                const docRef = doc(db, "users", auth.currentUser.uid, "settings", "targetCompanyMasterData");
+                await setDoc(docRef, { data: dataStr }, { merge: true });
+            } catch (e) {
+                console.warn("Failed to save targetCompanyMasterData:", e);
+            }
+        }
+    }, 1000);
 }
 
 function loadTargetCompanyMaster() {
