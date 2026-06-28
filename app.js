@@ -171,7 +171,7 @@ const calendarSection = document.getElementById('calendar-section');
 const calendarEl = document.getElementById('calendar');
 
 // Version Check
-console.log("【就活メモ】 アプリバージョン: v1.17.0 (2026-06-28 企業一括追加・部分更新機能)");
+console.log("【就活メモ】 アプリバージョン: v1.17.1 (2026-06-29 列ズレ修正(シフト)機能追加)");
 
 // State
 let isSignupMode = false;
@@ -4084,7 +4084,67 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-// --- Modal Save Logic ---
+// --- Modal Save & Shift Logic ---
+const editModalShiftRightBtn = document.getElementById('edit-modal-shift-right-btn');
+const editModalShiftLeftBtn = document.getElementById('edit-modal-shift-left-btn');
+
+if (editModalShiftRightBtn) {
+    editModalShiftRightBtn.addEventListener('click', () => {
+        if (!currentEditItemId || !currentEditField) return;
+        const row = mockData.find(d => d.id === currentEditItemId);
+        if (!row) return;
+
+        const validItems = formatBuilderData.filter(d => d && d.name && d.name.trim() !== "");
+        const headers = ["企業名", ...validItems.map(d => d.name)];
+        const startIndex = headers.indexOf(currentEditField);
+        if (startIndex === -1) {
+            alert("この項目はシフトできません。");
+            return;
+        }
+
+        if (!confirm(`【右シフトの確認】\n「${currentEditField}」以降のすべての列のデータを、右に1つずつ移動させますか？\n(一番右のデータは消去されます)`)) return;
+
+        const updates = {};
+        for (let i = headers.length - 2; i >= startIndex; i--) {
+            updates[headers[i+1]] = row[headers[i]] || "";
+        }
+        updates[currentEditField] = "";
+
+        updateItemData(currentEditItemId, updates);
+        editModal.style.display = 'none';
+        currentEditItemId = null;
+        currentEditField = null;
+    });
+}
+
+if (editModalShiftLeftBtn) {
+    editModalShiftLeftBtn.addEventListener('click', () => {
+        if (!currentEditItemId || !currentEditField) return;
+        const row = mockData.find(d => d.id === currentEditItemId);
+        if (!row) return;
+
+        const validItems = formatBuilderData.filter(d => d && d.name && d.name.trim() !== "");
+        const headers = ["企業名", ...validItems.map(d => d.name)];
+        const startIndex = headers.indexOf(currentEditField);
+        if (startIndex === -1) {
+            alert("この項目はシフトできません。");
+            return;
+        }
+
+        if (!confirm(`【左詰めの確認】\n「${currentEditField}」以降のすべての列のデータを、左に1つずつ詰め合わせますか？\n(現在の「${currentEditField}」のデータは上書きされ消去されます)`)) return;
+
+        const updates = {};
+        for (let i = startIndex; i < headers.length - 1; i++) {
+            updates[headers[i]] = row[headers[i+1]] || "";
+        }
+        updates[headers[headers.length - 1]] = "";
+
+        updateItemData(currentEditItemId, updates);
+        editModal.style.display = 'none';
+        currentEditItemId = null;
+        currentEditField = null;
+    });
+}
 editModalSaveBtn.addEventListener('click', () => {
     const newText = editModalTextarea.value.trim();
     if (currentEditItemId && currentEditField) {
