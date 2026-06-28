@@ -1026,7 +1026,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // Load manual target companies
-    loadManualTargetCompanies();
+    loadTargetCompanyMaster();
     
     // API settings initialization
     const apiEsToggle = document.getElementById('api-es-toggle');
@@ -1953,23 +1953,41 @@ function buildPromptString(itemsList, esEnabled, isApiMode = false, checkedItems
     return prompt;
 }
 
-// --- Manual Target Companies Logic ---
-let manualTargetCompaniesData = [{ name: "", context: "" }];
+// --- Target Company Master Logic ---
+let targetCompanyMasterData = [];
 
-function renderManualTargetCompanies() {
-    const listEl = document.getElementById('manual-target-companies-list');
+function renderTargetCompanyMaster() {
+    const listEl = document.getElementById('target-company-master-list');
     if (!listEl) return;
     listEl.innerHTML = "";
     
-    manualTargetCompaniesData.forEach((item, index) => {
+    if (targetCompanyMasterData.length === 0) {
+        listEl.innerHTML = "<p style='color: var(--text-color); opacity: 0.6; font-size: 0.85rem;'>企業が登録されていません。「+ 新しい企業をマスターに追加」から登録してください。</p>";
+        return;
+    }
+    
+    targetCompanyMasterData.forEach((item, index) => {
         const row = document.createElement('div');
         row.style.display = 'flex';
         row.style.gap = '8px';
-        row.style.alignItems = 'flex-start';
+        row.style.alignItems = 'center';
+        row.style.background = 'var(--bg-color)';
+        row.style.padding = '8px';
+        row.style.borderRadius = '4px';
+        row.style.border = '1px solid var(--border-color)';
+        
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = !!item.selected;
+        checkbox.style.cursor = 'pointer';
+        checkbox.addEventListener('change', (e) => {
+            item.selected = e.target.checked;
+            saveTargetCompanyMaster();
+        });
         
         const nameInput = document.createElement('input');
         nameInput.type = 'text';
-        nameInput.placeholder = "企業名 (例: 株式会社A)";
+        nameInput.placeholder = "企業名 (必須)";
         nameInput.value = item.name;
         nameInput.style.flex = "1";
         nameInput.style.padding = "6px";
@@ -1978,13 +1996,13 @@ function renderManualTargetCompanies() {
         nameInput.style.fontSize = "0.85rem";
         nameInput.addEventListener('input', (e) => {
             item.name = e.target.value;
-            saveManualTargetCompanies();
+            saveTargetCompanyMaster();
         });
         
         const contextInput = document.createElement('input');
         contextInput.type = 'text';
         contextInput.placeholder = "前提条件・備考 (例: SE職志望)";
-        contextInput.value = item.context;
+        contextInput.value = item.context || "";
         contextInput.style.flex = "2";
         contextInput.style.padding = "6px";
         contextInput.style.borderRadius = "4px";
@@ -1992,22 +2010,23 @@ function renderManualTargetCompanies() {
         contextInput.style.fontSize = "0.85rem";
         contextInput.addEventListener('input', (e) => {
             item.context = e.target.value;
-            saveManualTargetCompanies();
+            saveTargetCompanyMaster();
         });
         
         const delBtn = document.createElement('button');
         delBtn.innerHTML = '✕';
         delBtn.className = 'icon-btn';
+        delBtn.title = '削除';
         delBtn.style.padding = '6px';
         delBtn.addEventListener('click', () => {
-            manualTargetCompaniesData.splice(index, 1);
-            if (manualTargetCompaniesData.length === 0) {
-                manualTargetCompaniesData.push({ name: "", context: "" });
+            if (confirm(`「${item.name || 'この企業'}」をマスターから削除しますか？`)) {
+                targetCompanyMasterData.splice(index, 1);
+                saveTargetCompanyMaster();
+                renderTargetCompanyMaster();
             }
-            saveManualTargetCompanies();
-            renderManualTargetCompanies();
         });
         
+        row.appendChild(checkbox);
         row.appendChild(nameInput);
         row.appendChild(contextInput);
         row.appendChild(delBtn);
@@ -2015,26 +2034,50 @@ function renderManualTargetCompanies() {
     });
 }
 
-function saveManualTargetCompanies() {
-    localStorage.setItem('manualTargetCompaniesData', JSON.stringify(manualTargetCompaniesData));
+function saveTargetCompanyMaster() {
+    localStorage.setItem('targetCompanyMasterData', JSON.stringify(targetCompanyMasterData));
 }
 
-function loadManualTargetCompanies() {
-    const saved = localStorage.getItem('manualTargetCompaniesData');
+function loadTargetCompanyMaster() {
+    const saved = localStorage.getItem('targetCompanyMasterData');
     if (saved) {
         try {
-            manualTargetCompaniesData = JSON.parse(saved);
+            targetCompanyMasterData = JSON.parse(saved);
         } catch (e) {}
+    } else {
+        // Migration from old manual data if exists
+        const oldSaved = localStorage.getItem('manualTargetCompaniesData');
+        if (oldSaved) {
+            try {
+                const oldData = JSON.parse(oldSaved);
+                targetCompanyMasterData = oldData.map(d => ({
+                    id: Date.now() + Math.random(),
+                    name: d.name,
+                    context: d.context,
+                    selected: !!(d.name.trim()) // Select non-empty by default
+                })).filter(d => d.name.trim() !== "");
+            } catch (e) {}
+        }
     }
-    renderManualTargetCompanies();
+    renderTargetCompanyMaster();
 }
 
-const addTargetCompanyBtn = document.getElementById('add-target-company-btn');
-if (addTargetCompanyBtn) {
-    addTargetCompanyBtn.addEventListener('click', () => {
-        manualTargetCompaniesData.push({ name: "", context: "" });
-        saveManualTargetCompanies();
-        renderManualTargetCompanies();
+const addTargetCompanyMasterBtn = document.getElementById('add-target-company-master-btn');
+if (addTargetCompanyMasterBtn) {
+    addTargetCompanyMasterBtn.addEventListener('click', () => {
+        targetCompanyMasterData.push({ id: Date.now(), name: "", context: "", selected: true });
+        saveTargetCompanyMaster();
+        renderTargetCompanyMaster();
+    });
+}
+
+const toggleAllBtn = document.getElementById('toggle-all-target-companies-btn');
+if (toggleAllBtn) {
+    toggleAllBtn.addEventListener('click', () => {
+        const allSelected = targetCompanyMasterData.length > 0 && targetCompanyMasterData.every(t => t.selected);
+        targetCompanyMasterData.forEach(t => t.selected = !allSelected);
+        saveTargetCompanyMaster();
+        renderTargetCompanyMaster();
     });
 }
 
@@ -2060,37 +2103,25 @@ generateFormatBtn.addEventListener('click', async () => {
     const isEsEnabled = globalEsToggle ? globalEsToggle.checked : false;
     const basePrompt = buildPromptString(formatBuilderData, isEsEnabled, false);
     
-    const charLimitInput = document.getElementById('manual-char-limit');
-    const limit = charLimitInput && charLimitInput.value ? parseInt(charLimitInput.value, 10) : 2000;
-    
-    let targetCompaniesFormatted = "";
-    const validTargets = manualTargetCompaniesData.filter(t => t.name.trim() !== "");
-    if (validTargets.length > 0) {
-        validTargets.forEach(t => {
-            targetCompaniesFormatted += `- 企業名: ${t.name}\n`;
-            if (t.context && t.context.trim() !== "") {
-                targetCompaniesFormatted += `  前提条件・備考: ${t.context}\n`;
-            }
-        });
-        basePrompt += `\n【調査対象企業と前提条件】\n以下の企業について、指定された前提条件（どの部署・条件の募集か等）に基づいて調査を行ってください。不明な場合は「不明」としてください。\n${targetCompaniesFormatted}\n`;
-    }
-    
-    // Split logic
-    const lines = basePrompt.split('\n');
+    const validTargets = targetCompanyMasterData.filter(t => t.selected && t.name.trim() !== "");
     let chunks = [];
-    let currentChunk = "";
     
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        if ((currentChunk.length + line.length + 1) > limit && currentChunk.trim().length > 0) {
-            chunks.push(currentChunk.trim());
-            currentChunk = line + "\n";
-        } else {
-            currentChunk += line + "\n";
+    if (validTargets.length === 0) {
+        chunks.push(basePrompt + `\n\n【調査対象企業】\n(※ここに企業名を入力してください)\n以上について、指定のフォーマットで調査・出力してください。`);
+    } else {
+        const CHUNK_SIZE = 5;
+        for (let i = 0; i < validTargets.length; i += CHUNK_SIZE) {
+            const batch = validTargets.slice(i, i + CHUNK_SIZE);
+            let compStr = "";
+            batch.forEach(t => {
+                compStr += `- 企業名: ${t.name}\n`;
+                if (t.context && t.context.trim() !== "") {
+                    compStr += `  前提条件・備考: ${t.context}\n`;
+                }
+            });
+            const chunkPrompt = basePrompt + `\n\n【調査対象企業と個別の前提条件】\n以下の企業について、指定された前提条件（どの部署・条件の募集か等）に基づいて調査を行い、指定のフォーマットで出力してください。不明な場合は「不明」としてください。\n\n${compStr}`;
+            chunks.push(chunkPrompt);
         }
-    }
-    if (currentChunk.trim().length > 0) {
-        chunks.push(currentChunk.trim());
     }
     
     const container = document.getElementById('manual-chunks-container');
@@ -2099,18 +2130,9 @@ generateFormatBtn.addEventListener('click', async () => {
     container.innerHTML = ""; // Clear existing chunks
     
     chunks.forEach((chunk, index) => {
-        const isLast = (index === chunks.length - 1);
-        
         let finalChunkText = chunk;
-        if (!isLast) {
-            finalChunkText += `\n\n【条件分割 ${index + 1}/${chunks.length}】\nまだ回答しないでください。「了解しました」とのみ返答してください。`;
-        } else {
-            finalChunkText += `\n\n【条件分割 ${index + 1}/${chunks.length}】最後の条件です。\n以上のすべての条件を踏まえて、以下の企業についてウェブ検索等を用いて調査し、指定のフォーマットで出力してください。\n\n`;
-            if (targetCompaniesFormatted) {
-                finalChunkText += `【調査対象企業と個別の前提条件】\n${targetCompaniesFormatted}`;
-            } else {
-                finalChunkText += `【調査対象企業】\n(※ここに企業名を入力してください)`;
-            }
+        if (chunks.length > 1) {
+            finalChunkText = `【分割プロンプト ${index + 1}/${chunks.length}】\n※プロンプトの文字数超過を防ぐため分割されています。以下のプロンプトを個別にAIに送信してください。\n\n` + finalChunkText;
         }
         
         const wrapper = document.createElement('div');
