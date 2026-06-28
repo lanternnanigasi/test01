@@ -171,7 +171,7 @@ const calendarSection = document.getElementById('calendar-section');
 const calendarEl = document.getElementById('calendar');
 
 // Version Check
-console.log("【就活メモ】 アプリバージョン: v1.8.2 (2026-06-28 エラーログ非表示・キュー制御改善版)");
+console.log("【就活メモ】 アプリバージョン: v1.9.0 (2026-06-28 フォーマット分離・手動分割生成・安定化パース対応)");
 
 // State
 let isSignupMode = false;
@@ -1289,6 +1289,28 @@ function renderFormatBuilder() {
         descInput.addEventListener('input', (e) => { item.description = e.target.value; });
         row.appendChild(descInput);
 
+        // API Only Checkbox
+        const apiOnlyLabel = document.createElement('label');
+        apiOnlyLabel.style.display = 'flex';
+        apiOnlyLabel.style.alignItems = 'center';
+        apiOnlyLabel.style.gap = '4px';
+        apiOnlyLabel.style.fontSize = '0.8rem';
+        apiOnlyLabel.style.color = 'var(--text-color)';
+        apiOnlyLabel.style.cursor = 'pointer';
+        apiOnlyLabel.title = '手動検索（ウェブ検索等）で出力するプロンプトからはこの項目を除外します';
+        
+        const apiOnlyCb = document.createElement('input');
+        apiOnlyCb.type = 'checkbox';
+        apiOnlyCb.checked = !!item.isApiOnly;
+        apiOnlyCb.addEventListener('change', (e) => {
+            item.isApiOnly = e.target.checked;
+            saveFormatBuilderDataAsync();
+        });
+        
+        apiOnlyLabel.appendChild(apiOnlyCb);
+        apiOnlyLabel.appendChild(document.createTextNode('API(メール処理)専用項目にする (手動プロンプトから除外)'));
+        row.appendChild(apiOnlyLabel);
+
         // Attributes container
         if (item.attributes.length > 0) {
             const attrContainer = document.createElement('div');
@@ -1653,10 +1675,16 @@ function updateCalendarModalTypeSelect() {
 function buildPromptString(itemsList, esEnabled, isApiMode = false, checkedItems = []) {
     let prompt = `【システム動作指定（絶対厳守）】\nあなたはユーザーの入力データを特定のフォーマットに変換して出力するシステムです。以下のルールに一つでも違反した場合、データ取り込みが失敗しシステムがクラッシュします。必ず以下の制約を100%遵守して回答を生成してください。\n\n`;
     
-    prompt += `【最重要ルール: 無効データの除外と統合】\n`;
-    prompt += `1. 提供されたテキストが企業からのスカウトメールや採用関連のメッセージではない場合（例：単なるおすすめ求人配信、リクナビNEXT等の自動送信メルマガ、スパムメール、登録完了通知など）は、絶対に表の行を作成せず、ただ一言「無効なスカウトメール」とだけ出力してください。\n`;
-    prompt += `2. 提供されたテキストの中に「同一企業からの複数のメール内容（例：○○株式会社の面接案内と、同じく○○株式会社の締切案内）」が混ざっている場合、出力行を複数に分けず、必ず「1つの企業（1行）」として情報を統合し、すべての内容を1つの行（やメモ内）にまとめて出力してください。\n`;
-    prompt += `3. 各項目の情報（特に初任給、残業時間、休日数などの数値）がメールや調査で「分からない・記載がない」場合は、絶対に「0」や空欄で誤魔化さず、必ず「不明」と出力してください。\n\n`;
+    if (isApiMode) {
+        prompt += `【最重要ルール: 無効データの除外と統合】\n`;
+        prompt += `1. 提供されたテキストが企業からのスカウトメールや採用関連のメッセージではない場合（例：単なるおすすめ求人配信、リクナビNEXT等の自動送信メルマガ、スパムメール、登録完了通知など）は、絶対に表の行を作成せず、ただ一言「無効なスカウトメール」とだけ出力してください。\n`;
+        prompt += `2. 提供されたテキストの中に「同一企業からの複数のメール内容（例：○○株式会社の面接案内と、同じく○○株式会社の締切案内）」が混ざっている場合、出力行を複数に分けず、必ず「1つの企業（1行）」として情報を統合し、すべての内容を1つの行（やメモ内）にまとめて出力してください。\n`;
+        prompt += `3. 各項目の情報（特に初任給、残業時間、休日数などの数値）がメールや調査で「分からない・記載がない」場合は、絶対に「0」や空欄で誤魔化さず、必ず「不明」と出力してください。\n\n`;
+    } else {
+        prompt += `【最重要ルール】\n`;
+        prompt += `1. 複数企業のデータを出力する場合は、必ず1社につき1行で出力してください。\n`;
+        prompt += `2. 企業情報に関して、ウェブ検索等で「分からない・記載がない」場合は、絶対に「0」や空欄で誤魔化さず、必ず「不明」と出力してください。\n\n`;
+    }
 
     const coreValuesEl = document.getElementById('account-core-values');
     const coreValuesText = coreValuesEl ? coreValuesEl.value.trim() : "";
@@ -1676,6 +1704,8 @@ function buildPromptString(itemsList, esEnabled, isApiMode = false, checkedItems
 
     let varCount = 1;
     itemsList.forEach(item => {
+        if (!isApiMode && item.isApiOnly) return; // 手動モードではAPI専用項目を除外
+
         prompt += `- ${item.name}\n`;
         if (item.description) {
             prompt += `  (説明: ${item.description})\n`;
@@ -1718,9 +1748,12 @@ function buildPromptString(itemsList, esEnabled, isApiMode = false, checkedItems
     prompt += `\n【最終出力フォーマットの厳格な制約】\n`;
     prompt += `・Markdownの表形式（|---|やヘッダー）は絶対に生成しないでください。システムが破壊されます。\n`;
     prompt += `・必ず「/」で情報が区切られた1行のデータ行のみを出力してください。\n`;
+    prompt += `・【最重要】複数企業のデータを出力する場合、各企業データの末尾（行の終わり）に必ず「 //END// 」という記号を記載してください。（例: / 企業名 / ... / //END// ）\n`;
     prompt += `・前置き、挨拶、説明などのテキストは一切出力しないでください。\n`;
-    prompt += `・無効なメールの場合は、「無効なスカウトメール」とだけ出力し、絶対にデータ行を作らないでください。\n\n`;
-    prompt += `[出力形式の例]\n/ A株式会社 / IT / (項目内容) / ... / 求める人物像です。 [[color:red]] [[memo_自己PR添削: ...]] /\n\n`;
+    if (isApiMode) {
+        prompt += `・無効なメールの場合は、「無効なスカウトメール」とだけ出力し、絶対にデータ行を作らないでください。\n\n`;
+    }
+    prompt += `[出力形式の例]\n/ A株式会社 / IT / (項目内容) / ... / 求める人物像です。 [[color:red]] [[memo_自己PR添削: ...]] / //END//\n\n`;
     
     if (isApiMode) {
         prompt += `【API自動処理時の特別指示：トークン節約と調査徹底】\n`;
@@ -1762,10 +1795,89 @@ generateFormatBtn.addEventListener('click', async () => {
     
     const globalEsToggle = document.getElementById('global-es-toggle');
     const isEsEnabled = globalEsToggle ? globalEsToggle.checked : false;
-    const prompt = buildPromptString(formatBuilderData, isEsEnabled);
+    const basePrompt = buildPromptString(formatBuilderData, isEsEnabled, false);
     
-    formatOutput.value = prompt;
-
+    const charLimitInput = document.getElementById('manual-char-limit');
+    const limit = charLimitInput && charLimitInput.value ? parseInt(charLimitInput.value, 10) : 2000;
+    
+    const targetCompaniesInput = document.getElementById('manual-target-companies');
+    const targetCompanies = targetCompaniesInput ? targetCompaniesInput.value.trim() : "";
+    
+    // Split logic
+    const lines = basePrompt.split('\n');
+    let chunks = [];
+    let currentChunk = "";
+    
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if ((currentChunk.length + line.length + 1) > limit && currentChunk.trim().length > 0) {
+            chunks.push(currentChunk.trim());
+            currentChunk = line + "\n";
+        } else {
+            currentChunk += line + "\n";
+        }
+    }
+    if (currentChunk.trim().length > 0) {
+        chunks.push(currentChunk.trim());
+    }
+    
+    const container = document.getElementById('manual-chunks-container');
+    if (!container) return;
+    
+    container.innerHTML = ""; // Clear existing chunks
+    
+    chunks.forEach((chunk, index) => {
+        const isLast = (index === chunks.length - 1);
+        
+        let finalChunkText = chunk;
+        if (!isLast) {
+            finalChunkText += `\n\n【条件分割 ${index + 1}/${chunks.length}】\nまだ回答しないでください。「了解しました」とのみ返答してください。`;
+        } else {
+            finalChunkText += `\n\n【条件分割 ${index + 1}/${chunks.length}】最後の条件です。\n以上のすべての条件を踏まえて、以下の企業についてウェブ検索等を用いて調査し、指定のフォーマットで出力してください。\n\n`;
+            if (targetCompanies) {
+                finalChunkText += `【対象企業】\n${targetCompanies}`;
+            } else {
+                finalChunkText += `【対象企業】\n(※ここに企業名を入力してください)`;
+            }
+        }
+        
+        const wrapper = document.createElement('div');
+        wrapper.style.position = 'relative';
+        
+        const textarea = document.createElement('textarea');
+        textarea.readOnly = true;
+        textarea.value = finalChunkText;
+        textarea.style.height = "180px";
+        textarea.style.background = "var(--bg-alt)";
+        textarea.style.width = "100%";
+        textarea.style.padding = "12px";
+        textarea.style.borderRadius = "8px";
+        textarea.style.border = "1px solid var(--border-color)";
+        textarea.style.fontFamily = "inherit";
+        textarea.style.fontSize = "0.9rem";
+        textarea.style.resize = "vertical";
+        
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'btn primary';
+        copyBtn.textContent = `コピー (${index + 1}/${chunks.length})`;
+        copyBtn.style.position = 'absolute';
+        copyBtn.style.right = '12px';
+        copyBtn.style.bottom = '12px';
+        copyBtn.style.width = 'auto';
+        copyBtn.style.fontSize = '0.85rem';
+        copyBtn.style.padding = '6px 12px';
+        copyBtn.addEventListener('click', () => {
+            navigator.clipboard.writeText(finalChunkText).then(() => {
+                const originalText = copyBtn.textContent;
+                copyBtn.textContent = "コピー完了！";
+                setTimeout(() => copyBtn.textContent = originalText, 2000);
+            });
+        });
+        
+        wrapper.appendChild(textarea);
+        wrapper.appendChild(copyBtn);
+        container.appendChild(wrapper);
+    });
 });
 
 // --- API Integration Logic ---
@@ -1879,15 +1991,7 @@ if (saveApiSettingsBtn) {
     });
 }
 
-copyFormatBtn.addEventListener('click', () => {
-    if (!formatOutput.value) return;
-    navigator.clipboard.writeText(formatOutput.value).then(() => {
-        const originalText = copyFormatBtn.textContent;
-        copyFormatBtn.textContent = "コピー完了！";
-        setTimeout(() => copyFormatBtn.textContent = originalText, 2000);
-    });
-});
-
+// Removed old copyFormatBtn listener since it's dynamically generated now.
 // --- Markdown Parser Logic ---
 function parseMarkdownTable(markdown) {
     // 括弧内の改行を <br> に変換する (ES等の長文出力対応)
@@ -1898,6 +2002,9 @@ function parseMarkdownTable(markdown) {
     markdown = markdown.replace(/<!--([\s\S]*?)-->/g, (match) => {
         return match.replace(/\n/g, '<br>');
     });
+
+    // //END// を改行に変換して確実な行区切りを行う
+    markdown = markdown.replace(/\/\/END\/\//g, '\n');
 
     const lines = markdown.trim().split('\n');
     

@@ -92,9 +92,25 @@
                             </div>
                         </div>
                     </div>
-                    <div style="position: relative;">
-                        <textarea id="format-output" readonly placeholder="生成されたプロンプトがここに表示されます。コピーしてAIに貼り付けてください。" style="height: 100px; background: var(--bg-alt);"></textarea>
-                        <button id="copy-format-btn" class="btn primary" style="position: absolute; right: 12px; bottom: 28px; width: auto; font-size: 0.85rem; padding: 6px 12px;">コピー</button>
+                    <div style="margin-top: 16px; background: rgba(0,0,0,0.03); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                        <h4 style="margin-top: 0; margin-bottom: 8px; font-size: 0.95rem;">手動調査用プロンプト生成設定</h4>
+                        <div style="display: flex; gap: 16px; align-items: flex-end;">
+                            <div style="flex: 1;">
+                                <label style="font-size: 0.85rem; display: block; margin-bottom: 4px;">調査対象の企業名 (自由入力)</label>
+                                <input type="text" id="manual-target-companies" placeholder="例: 株式会社A、株式会社B" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); font-size: 0.9rem;">
+                            </div>
+                            <div style="width: 120px;">
+                                <label style="font-size: 0.85rem; display: block; margin-bottom: 4px;">分割文字数</label>
+                                <input type="number" id="manual-char-limit" value="2000" step="500" min="500" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); font-size: 0.9rem;">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="manual-chunks-container" style="margin-top: 16px; display: flex; flex-direction: column; gap: 12px;">
+                        <div style="position: relative;" id="default-chunk-wrapper">
+                            <textarea id="format-output" readonly placeholder="「フォーマット生成」を押すとプロンプトが生成されます。" style="height: 100px; background: var(--bg-alt);"></textarea>
+                            <button id="copy-format-btn" class="btn primary" style="position: absolute; right: 12px; bottom: 28px; width: auto; font-size: 0.85rem; padding: 6px 12px;">コピー</button>
+                        </div>
                     </div>
                 </div>
             </details>
