@@ -331,6 +331,10 @@ tbody tr.is-hidden {
     background: #f1f5f9;
 }
 
+tbody tr.bg-green { background-color: rgba(16, 185, 129, 0.1) !important; }
+tbody tr.bg-yellow { background-color: rgba(245, 158, 11, 0.1) !important; }
+tbody tr.bg-red { background-color: rgba(239, 68, 68, 0.1) !important; }
+
 tbody tr {
     transition: background-color 0.2s;
 }

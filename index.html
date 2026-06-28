@@ -95,6 +95,19 @@
                             <button id="open-archive-modal-btn" class="btn text" style="padding: 6px 12px; border: 1px dashed var(--border-color);" onclick="openFormatArchiveModal()">📚 アーカイブから追加</button>
                         </div>
                         
+                        <div style="margin-top: 16px; padding: 12px; border-radius: 8px; border: 1px dashed var(--border-color); background: rgba(0,0,0,0.02);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <label style="font-size: 0.85rem; font-weight: bold; color: var(--text-color);">⚙️ AIプロンプトの分割・出力設定</label>
+                                <label style="font-size: 0.8rem; color: var(--text-color); opacity: 0.8;">※文字数・企業数の【両方の条件】を満たすように自動分割されます。</label>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <label style="font-size: 0.85rem;">最大文字数 (入力上限):</label>
+                                <input type="number" id="manual-char-limit" value="2000" step="500" min="500" style="width: 80px; padding: 6px; border-radius: 4px; border: 1px solid var(--border-color); font-size: 0.85rem;">
+                                <label style="font-size: 0.85rem; margin-left: 12px;">最大企業数 (1回あたりの出力上限):</label>
+                                <input type="number" id="manual-chunk-size" value="5" step="1" min="1" max="20" style="width: 60px; padding: 6px; border-radius: 4px; border: 1px solid var(--border-color); font-size: 0.85rem;">
+                            </div>
+                        </div>
+
                         <div style="margin-top: 12px; display: flex; justify-content: space-between; align-items: center;">
                             <div style="display: flex; gap: 8px;">
                                 <input type="text" id="format-save-name" placeholder="フォーマット名" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color); font-size: 0.9rem; background: rgba(255, 255, 255, 0.5); width: 150px;">
@@ -111,19 +124,18 @@
                     <div style="margin-top: 16px; background: rgba(0,0,0,0.03); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
                         <h4 style="margin-top: 0; margin-bottom: 8px; font-size: 0.95rem;">手動調査用 企業マスター表 (選択した企業のみプロンプトに含まれます)</h4>
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                            <label style="font-size: 0.85rem; color: var(--text-color);">※文字数・企業数の【両方の条件】を満たすようにプロンプトが自動分割されます。</label>
+                            <label style="font-size: 0.85rem; color: var(--text-color);"></label>
                             <div style="display: flex; align-items: center; gap: 8px;">
-                                <label style="font-size: 0.8rem;">最大文字数:</label>
-                                <input type="number" id="manual-char-limit" value="2000" step="500" min="500" style="width: 70px; padding: 4px; border-radius: 4px; border: 1px solid var(--border-color); font-size: 0.85rem;">
-                                <label style="font-size: 0.8rem; margin-left: 8px;">最大企業数:</label>
-                                <input type="number" id="manual-chunk-size" value="5" step="1" min="1" max="20" style="width: 60px; padding: 4px; border-radius: 4px; border: 1px solid var(--border-color); font-size: 0.85rem;">
                                 <button id="toggle-all-target-companies-btn" class="btn text" style="font-size: 0.8rem; padding: 4px 8px; border: 1px solid var(--border-color); margin-left: 8px;">☑ 全選択 / 全解除</button>
                             </div>
                         </div>
                         <div id="target-company-master-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto; padding-right: 8px;">
                             <!-- JSでマスター表が追加されます -->
                         </div>
-                        <button id="add-target-company-master-btn" class="btn text" style="padding: 6px 12px; margin-top: 12px; font-size: 0.85rem; border: 1px dashed var(--border-color); width: 100%;">+ 新しい企業をマスターに追加</button>
+                        <div style="display: flex; gap: 8px; margin-top: 12px;">
+                            <button id="add-target-company-master-btn" class="btn text" style="padding: 6px 12px; font-size: 0.85rem; border: 1px dashed var(--border-color); flex: 1;">+ 新しい企業を1件追加</button>
+                            <button id="open-bulk-add-modal-btn" class="btn text" style="padding: 6px 12px; font-size: 0.85rem; border: 1px dashed var(--border-color); flex: 1;">📝 複数企業を一括追加 (コピペ)</button>
+                        </div>
                     </div>
                     
                     <div id="manual-chunks-container" style="margin-top: 16px; display: flex; flex-direction: column; gap: 12px;">
@@ -363,6 +375,22 @@
                         <button id="calendar-modal-save-btn" class="btn primary">保存</button>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 企業マスター 一括追加用モーダル -->
+    <div id="bulk-add-modal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.4);">
+        <div class="modal-content glass-card" style="margin: 5% auto; padding: 24px; width: 80%; max-width: 600px; position: relative;">
+            <span class="close-btn" id="close-bulk-add-modal" style="position: absolute; right: 20px; top: 20px; font-size: 24px; font-weight: bold; cursor: pointer;">&times;</span>
+            <h2 style="margin-top: 0;">複数企業を一括追加</h2>
+            <p style="font-size: 0.9rem; margin-bottom: 16px;">
+                追加したい企業名を改行区切りで貼り付けてください。
+            </p>
+            <textarea id="bulk-add-textarea" style="width: 100%; height: 200px; padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); font-size: 0.95rem; margin-bottom: 16px;" placeholder="株式会社A&#10;株式会社B&#10;株式会社C"></textarea>
+            <div style="display: flex; justify-content: flex-end; gap: 12px;">
+                <button id="cancel-bulk-add-btn" class="btn secondary">キャンセル</button>
+                <button id="confirm-bulk-add-btn" class="btn primary">一括追加する</button>
             </div>
         </div>
     </div>

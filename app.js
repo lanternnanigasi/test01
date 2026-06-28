@@ -171,7 +171,7 @@ const calendarSection = document.getElementById('calendar-section');
 const calendarEl = document.getElementById('calendar');
 
 // Version Check
-console.log("【就活メモ】 アプリバージョン: v1.15.0 (2026-06-28 プロンプト分割完全分離版・待機フェーズ実装)");
+console.log("【就活メモ】 アプリバージョン: v1.17.0 (2026-06-28 企業一括追加・部分更新機能)");
 
 // State
 let isSignupMode = false;
@@ -1183,7 +1183,7 @@ const defaultFormatBuilderData = [
     { id: 2, name: "職種", attributes: [{id: 21, val: "職種名には", type: "hashtag"}] },
     { id: 3, name: "初任給（万円）", attributes: [{id: 31, val: "必ず数値のみを抽出し", type: "variable"}] },
     { id: 4, name: "志望度", attributes: [{id: 41, val: "★の数で表現し", type: "variable"}, {id: 42, val: "★4以上", color: "green", type: "color"}, {id: 43, val: "★2以下", color: "red", type: "color"}] },
-    { id: 5, name: "選考ステップ", attributes: [] },
+    { id: 5, name: "選考状況", attributes: [{id: 51, type: "dropdown", dropdownId: 1}] },
     { id: 6, name: "インターン締切日", attributes: [{id: 61, val: "必ずYYYY-MM-DDの形式にして", type: "variable"}] },
     { id: 7, name: "特記事項", attributes: [{id: 71, val: "勤務形態や特定派遣であるなど、懸念点や特殊な条件がある場合のみ記載し、特にない場合は「なし」としてください", type: "rule"}] }
 ];
@@ -1407,9 +1407,32 @@ function renderFormatBuilder() {
             renderFormatBuilder();
         });
 
+        const includeCbLabel = document.createElement('label');
+        includeCbLabel.style.display = 'flex';
+        includeCbLabel.style.alignItems = 'center';
+        includeCbLabel.style.gap = '4px';
+        includeCbLabel.style.fontSize = '0.8rem';
+        includeCbLabel.style.cursor = 'pointer';
+        includeCbLabel.style.color = 'var(--primary)';
+        includeCbLabel.style.fontWeight = 'bold';
+        
+        const includeCb = document.createElement('input');
+        includeCb.type = 'checkbox';
+        includeCb.checked = item.isActive !== false;
+        includeCb.addEventListener('change', (e) => {
+            item.isActive = e.target.checked;
+            saveFormatBuilderDataAsync();
+            row.style.opacity = e.target.checked ? '1' : '0.5';
+        });
+        if (item.isActive === false) row.style.opacity = '0.5';
+        
+        includeCbLabel.appendChild(includeCb);
+        includeCbLabel.appendChild(document.createTextNode('含める(部分更新用)'));
+
         topRow.appendChild(upBtn);
         topRow.appendChild(downBtn);
         topRow.appendChild(nameInput);
+        topRow.appendChild(includeCbLabel);
         topRow.appendChild(addAttrBtn);
         topRow.appendChild(saveArchiveBtn);
         topRow.appendChild(delBtn);
@@ -1752,12 +1775,29 @@ async function loadSettings() {
 
     if (formatBuilderData.length === 0) {
         formatBuilderData = JSON.parse(JSON.stringify(defaultFormatBuilderData));
-    } else if (!formatBuilderData.some(d => d.name === "特記事項")) {
-        formatBuilderData.push({
-            id: Date.now(), 
-            name: "特記事項", 
-            attributes: [{ id: Date.now()+1, val: "勤務形態や特定派遣であるなど、懸念点や特殊な条件がある場合のみ記載し、特にない場合は「なし」としてください", type: "rule" }]
-        });
+    } else {
+        // "特記事項"が無ければ追加
+        if (!formatBuilderData.some(d => d.name === "特記事項")) {
+            formatBuilderData.push({
+                id: Date.now(), 
+                name: "特記事項", 
+                attributes: [{ id: Date.now()+1, val: "勤務形態や特定派遣であるなど、懸念点や特殊な条件がある場合のみ記載し、特にない場合は「なし」としてください", type: "rule" }]
+            });
+        }
+        // "選考ステップ"を"選考状況"にアップデートし、プルダウンを付与
+        const senkouItem = formatBuilderData.find(d => d.name === "選考状況" || d.name === "選考ステップ");
+        if (senkouItem) {
+            senkouItem.name = "選考状況";
+            if (!senkouItem.attributes.some(a => a.type === "dropdown")) {
+                senkouItem.attributes.push({ id: Date.now()+2, type: "dropdown", dropdownId: 1 });
+            }
+        }
+    }
+
+    if (customDropdownsData.length === 0) {
+        customDropdownsData = [
+            { id: 1, name: "選考状況", options: ["エントリー前", "書類選考中", "1次面接", "2次面接", "最終面接", "内定", "お見送り"] }
+        ];
     }
 
     renderCustomDropdownBuilder();
@@ -1849,7 +1889,7 @@ function updateCalendarModalTypeSelect() {
 }
 
 // --- Format Generator Helper ---
-function buildPromptString(itemsList, esEnabled, isApiMode = false, checkedItems = []) {
+function buildPromptString(itemsList, esEnabled, isApiMode = false, checkedItems = [], isPartialUpdate = false) {
     let prompt = `【システム動作指定（絶対厳守）】\nあなたはユーザーの入力データを特定のフォーマットに変換して出力するシステムです。以下のルールに一つでも違反した場合、データ取り込みが失敗しシステムがクラッシュします。必ず以下の制約を100%遵守して回答を生成してください。\n\n`;
     
     if (isApiMode) {
@@ -1867,7 +1907,7 @@ function buildPromptString(itemsList, esEnabled, isApiMode = false, checkedItems
     const coreValuesText = coreValuesEl ? coreValuesEl.value.trim() : "";
     const validAccountData = typeof accountData !== 'undefined' ? accountData.filter(a => a.title && a.value && a.value.trim() !== "") : [];
     
-    prompt += `【最重要: ユーザーの基本情報・就活の軸の反映】\n以下の『就活の軸』と『各企業の前提条件』を照らし合わせ、企業調査の評価基準として【必ず】用いてください。抽出項目の中に「おすすめ度」「マッチ度」「懸念点」等の評価や所感を求める項目がある場合、必ずこの『就活の軸』とどの程度合致しているかという観点で内容を生成・反映させてください。\n\n`;
+    prompt += `【絶対厳守: 就活の軸を用いた個別評価】\n以下の『就活の軸』と『各企業の前提条件』を、企業を評価する絶対的な基準として【必ず】用いてください。「おすすめ度」「志望度」「マッチ度」「懸念点」等を判断する際は、必ずこの『就活の軸』とどの程度合致しているかを根拠として出力内容に反映させてください。これを無視した出力はエラーとなります。\n\n`;
     if (coreValuesText) {
         prompt += `- 就活の軸 (絶対に譲れないこと等):\n${coreValuesText}\n\n`;
     } else {
@@ -1899,7 +1939,7 @@ function buildPromptString(itemsList, esEnabled, isApiMode = false, checkedItems
                     const ruleVal = attr.val ? attr.val : "重要なキーワードには「#IT」「#BtoB」のように";
                     prompt += `  [厳守] ${ruleVal}ハッシュタグを付けてください。\n`;
                 } else if (attr.type === "color" && attr.condition) {
-                    prompt += `  [厳守: 色付け] 「${attr.condition}」に該当する場合、必ずセルの内容の末尾に「 [[color:${attr.color}]] 」というタグを含めてください。※HTMLコメントではなく必ず二重角括弧を使用すること。\n`;
+                    prompt += `  [厳守: 色付け] 「${attr.condition}」に該当する場合、必ずセルの内容の末尾に「 [[color:${attr.color}]] 」というタグを含めてください。※「#green」等とは絶対に記述せず、必ず二重角括弧を使用すること。\n`;
                 } else if (attr.type === "variable") {
                     const varName = `var_${varCount.toString().padStart(3, '0')}`;
                     const ruleVal = attr.val ? attr.val : "必ず数値や日付のみを抽出し";
@@ -1932,11 +1972,20 @@ function buildPromptString(itemsList, esEnabled, isApiMode = false, checkedItems
         }
     }
 
+    if (isPartialUpdate) {
+        prompt += `\n【部分更新モード: 必須ヘッダー出力】\n`;
+        prompt += `今回はユーザーが特定の項目のみを更新（抽出）しようとしています。必ず出力するデータ行の1行目（実際のデータより上の行）に、今回出力する項目順を示すヘッダー行を以下の形式で出力してください。\n`;
+        const colNames = ["企業名", ...itemsList.map(item => item.name)];
+        prompt += `例: //COLUMNS:${colNames.join(',')}\n`;
+        prompt += `※このヘッダー行がないと、システムが既存のどの列を更新すべきか判断できず、データが破損します。\n`;
+    }
+
     prompt += `\n【最終出力フォーマットの厳格な制約】\n`;
     prompt += `・Markdownの表形式（|---|やヘッダー）は絶対に生成しないでください。システムが破壊されます。\n`;
     prompt += `・必ず「/」で情報が区切られた1行のデータ行のみを出力してください。\n`;
     prompt += `・【最重要】複数企業のデータを出力する場合、各企業データの末尾（行の終わり）に必ず「 ]@[ 」という記号を記載してください。（例: / 企業名 / ... / ]@[ ）\n`;
     prompt += `・前置き、挨拶、説明などのテキストは一切出力しないでください。\n`;
+    prompt += `・【最重要: 列ズレの防止】データが存在しない、または不明な項目は、必ず「不明」または「-」と出力してください。空欄にしたり、項目自体を省略したりして列を詰めるとシステムが崩壊します。必ず指定された全ての項目数分を出力してください。\n`;
     if (isApiMode) {
         prompt += `・無効なメールの場合は、「無効なスカウトメール」とだけ出力し、絶対にデータ行を作らないでください。\n\n`;
     }
@@ -2093,6 +2142,40 @@ if (addTargetCompanyMasterBtn) {
     });
 }
 
+const openBulkAddModalBtn = document.getElementById('open-bulk-add-modal-btn');
+const bulkAddModal = document.getElementById('bulk-add-modal');
+const closeBulkAddModal = document.getElementById('close-bulk-add-modal');
+const cancelBulkAddBtn = document.getElementById('cancel-bulk-add-btn');
+const confirmBulkAddBtn = document.getElementById('confirm-bulk-add-btn');
+const bulkAddTextarea = document.getElementById('bulk-add-textarea');
+
+if (openBulkAddModalBtn) {
+    openBulkAddModalBtn.addEventListener('click', () => {
+        if (bulkAddTextarea) bulkAddTextarea.value = "";
+        if (bulkAddModal) bulkAddModal.style.display = 'block';
+    });
+}
+const closeBulkAdd = () => { if (bulkAddModal) bulkAddModal.style.display = 'none'; };
+if (closeBulkAddModal) closeBulkAddModal.addEventListener('click', closeBulkAdd);
+if (cancelBulkAddBtn) cancelBulkAddBtn.addEventListener('click', closeBulkAdd);
+
+if (confirmBulkAddBtn) {
+    confirmBulkAddBtn.addEventListener('click', () => {
+        const text = bulkAddTextarea ? bulkAddTextarea.value : "";
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l !== "");
+        let added = 0;
+        lines.forEach(line => {
+            targetCompanyMasterData.push({ id: Date.now() + Math.random(), name: line, context: "", selected: true });
+            added++;
+        });
+        if (added > 0) {
+            saveTargetCompanyMaster();
+            renderTargetCompanyMaster();
+        }
+        closeBulkAdd();
+    });
+}
+
 const toggleAllBtn = document.getElementById('toggle-all-target-companies-btn');
 if (toggleAllBtn) {
     toggleAllBtn.addEventListener('click', () => {
@@ -2105,13 +2188,14 @@ if (toggleAllBtn) {
 
 // --- Format Generator Logic ---
 generateFormatBtn.addEventListener('click', async () => {
-    const validItems = formatBuilderData.filter(d => d.name.trim() !== "");
+    const activeItems = formatBuilderData.filter(d => d.isActive !== false);
+    const validItems = activeItems.filter(d => d.name.trim() !== "");
     if (validItems.length === 0) {
-        alert("抽出したい項目名を1つ以上入力してください！");
+        alert("抽出したい項目名を1つ以上チェックしてください！");
         return;
     }
     
-    // Save settings
+    // Save settings (save the full formatBuilderData with active flags)
     const dataStr = JSON.stringify(formatBuilderData);
     if (auth && auth.currentUser) {
         try {
@@ -2123,7 +2207,12 @@ generateFormatBtn.addEventListener('click', async () => {
     
     const globalEsToggle = document.getElementById('global-es-toggle');
     const isEsEnabled = globalEsToggle ? globalEsToggle.checked : false;
-    const basePrompt = buildPromptString(formatBuilderData, isEsEnabled, false);
+    
+    // Check if we are doing a partial update (not all valid original items are included)
+    const allValidOriginalCount = formatBuilderData.filter(d => d.name.trim() !== "").length;
+    const isPartialUpdate = validItems.length < allValidOriginalCount;
+
+    const basePrompt = buildPromptString(validItems, isEsEnabled, false, [], isPartialUpdate);
     
     const charLimitInput = document.getElementById('manual-char-limit');
     const charLimit = charLimitInput && charLimitInput.value ? parseInt(charLimitInput.value, 10) : 2000;
@@ -2192,7 +2281,7 @@ generateFormatBtn.addEventListener('click', async () => {
                 if (isFirstCompanyChunk) {
                     chunks.push(`企業リストを送信します。\n先ほどまでに送った全てのフォーマットと指示に従って、以下の企業について調査・出力してください。各企業の行末には必ず「 ]@[ 」を付けることを忘れないでください。\n\n${batchStr}`);
                 } else {
-                    chunks.push(`引き続き、先ほどのフォーマットと指示に従って、以下の企業について調査・出力してください。各企業の行末には必ず「 ]@[ 」を付けてください。\n\n${batchStr}`);
+                    chunks.push(`【指示継続】上記のフォーマットに従い、以下の企業を追加で出力してください。（行末に必ず「 ]@[ 」を付けること）\n\n${batchStr}`);
                 }
                 
                 isFirstCompanyChunk = false;
@@ -2215,7 +2304,7 @@ generateFormatBtn.addEventListener('click', async () => {
             if (isFirstCompanyChunk) {
                 chunks.push(`企業リストを送信します。\n先ほどまでに送った全てのフォーマットと指示に従って、以下の企業について調査・出力してください。各企業の行末には必ず「 ]@[ 」を付けることを忘れないでください。\n\n${batchStr}`);
             } else {
-                chunks.push(`引き続き、先ほどのフォーマットと指示に従って、以下の企業について調査・出力してください。各企業の行末には必ず「 ]@[ 」を付けてください。\n\n${batchStr}`);
+                chunks.push(`【指示継続】上記のフォーマットに従い、以下の企業を追加で出力してください。（行末に必ず「 ]@[ 」を付けること）\n\n${batchStr}`);
             }
         }
     }
@@ -2422,11 +2511,20 @@ function parseMarkdownTable(markdown) {
         // and map them based on the current formatBuilderData headers.
         const data = [];
         const validItems = formatBuilderData.filter(d => d && d.name && d.name.trim() !== "");
-        const fallbackHeaders = ["企業名", ...validItems.map(d => d.name)];
+        let fallbackHeaders = ["企業名", ...validItems.map(d => d.name)];
+        
+        // --- Partial Update Check ---
+        for (let i = 0; i < lines.length; i++) {
+            let line = lines[i].trim();
+            if (line.match(/^\/\/\s*COLUMNS\s*:/i)) {
+                fallbackHeaders = line.replace(/^\/\/\s*COLUMNS\s*:/i, '').split(',').map(h => h.trim());
+                break;
+            }
+        }
         
         for (let i = 0; i < lines.length; i++) {
             let line = lines[i].trim();
-            if (!line) continue;
+            if (!line || line.match(/^\/\/\s*COLUMNS\s*:/i)) continue;
             
             let delim = null;
             let splitRegex = null;
@@ -3003,11 +3101,11 @@ function evaluateCondition(item, row) {
         
         let isMatch = false;
         if (row.operator === "equals") {
-            // 指定したタグと完全に一致するセットを持っているか (完全一致は使いにくいので、すべて含まれるかで処理)
+            // 指定したタグと完全に一致するセットを持っているか
             isMatch = searchTags.every(st => tags.includes(st)) && searchTags.length === tags.length;
         } else {
-            // デフォルトは指定したタグが全て含まれるか (AND)
-            isMatch = searchTags.every(st => tags.some(t => t.includes(st)));
+            // デフォルトは指定したタグが全て含まれるか (AND - 完全一致)
+            isMatch = searchTags.every(st => tags.includes(st));
         }
         return row.not ? !isMatch : isMatch;
     } else if (row.field === "_bookmarked") {
