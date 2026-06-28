@@ -171,7 +171,7 @@ const calendarSection = document.getElementById('calendar-section');
 const calendarEl = document.getElementById('calendar');
 
 // Version Check
-console.log("【就活メモ】 アプリバージョン: v1.9.0 (2026-06-28 フォーマット分離・手動分割生成・安定化パース対応)");
+console.log("【就活メモ】 アプリバージョン: v1.9.1 (2026-06-28 調査対象の個別コンテキスト指定・AI評価精度向上版)");
 
 // State
 let isSignupMode = false;
@@ -1006,6 +1006,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
+    // Load manual target companies
+    loadManualTargetCompanies();
+    
     // API settings initialization
     const apiEsToggle = document.getElementById('api-es-toggle');
     if (apiEsToggle) {
@@ -1690,14 +1693,19 @@ function buildPromptString(itemsList, esEnabled, isApiMode = false, checkedItems
     const coreValuesText = coreValuesEl ? coreValuesEl.value.trim() : "";
     const validAccountData = typeof accountData !== 'undefined' ? accountData.filter(a => a.title && a.value && a.value.trim() !== "") : [];
     
-    if (coreValuesText || validAccountData.length > 0) {
-        prompt += `【ユーザーの基本情報・就活の軸】\n以下の情報を参考に、企業ごとにパーソナライズした調査や添削（リライト）を行ってください。\n\n`;
-        if (coreValuesText) {
-            prompt += `- 就活の軸 (絶対に譲れないこと等):\n${coreValuesText}\n\n`;
-        }
+    prompt += `【ユーザーの基本情報・就活の軸】\n以下の『就活の軸』と『各企業の前提条件』を照らし合わせ、あなたなりの客観的な評価（おすすめ度やマッチ度など）を行ってください。\n\n`;
+    if (coreValuesText) {
+        prompt += `- 就活の軸 (絶対に譲れないこと等):\n${coreValuesText}\n\n`;
+    } else {
+        prompt += `- 就活の軸 (絶対に譲れないこと等):\n(※アカウント設定で入力されていません。一般的な視点で評価してください)\n\n`;
+    }
+    
+    if (validAccountData.length > 0) {
         validAccountData.forEach(a => {
             prompt += `- ${a.title}:\n${a.value}\n\n`;
         });
+    } else {
+        prompt += `(※基本プロフィールは未入力です)\n\n`;
     }
 
     prompt += `【抽出項目と個別ルール】\n以下の項目順に、企業情報を調査・整理してください。各項目のルールはシステム要件につき【必ず】実行してください。\n- 企業名\n`;
@@ -1775,6 +1783,91 @@ function buildPromptString(itemsList, esEnabled, isApiMode = false, checkedItems
     return prompt;
 }
 
+// --- Manual Target Companies Logic ---
+let manualTargetCompaniesData = [{ name: "", context: "" }];
+
+function renderManualTargetCompanies() {
+    const listEl = document.getElementById('manual-target-companies-list');
+    if (!listEl) return;
+    listEl.innerHTML = "";
+    
+    manualTargetCompaniesData.forEach((item, index) => {
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.gap = '8px';
+        row.style.alignItems = 'flex-start';
+        
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.placeholder = "企業名 (例: 株式会社A)";
+        nameInput.value = item.name;
+        nameInput.style.flex = "1";
+        nameInput.style.padding = "6px";
+        nameInput.style.borderRadius = "4px";
+        nameInput.style.border = "1px solid var(--border-color)";
+        nameInput.style.fontSize = "0.85rem";
+        nameInput.addEventListener('input', (e) => {
+            item.name = e.target.value;
+            saveManualTargetCompanies();
+        });
+        
+        const contextInput = document.createElement('input');
+        contextInput.type = 'text';
+        contextInput.placeholder = "前提条件・備考 (例: SE職志望)";
+        contextInput.value = item.context;
+        contextInput.style.flex = "2";
+        contextInput.style.padding = "6px";
+        contextInput.style.borderRadius = "4px";
+        contextInput.style.border = "1px solid var(--border-color)";
+        contextInput.style.fontSize = "0.85rem";
+        contextInput.addEventListener('input', (e) => {
+            item.context = e.target.value;
+            saveManualTargetCompanies();
+        });
+        
+        const delBtn = document.createElement('button');
+        delBtn.innerHTML = '✕';
+        delBtn.className = 'icon-btn';
+        delBtn.style.padding = '6px';
+        delBtn.addEventListener('click', () => {
+            manualTargetCompaniesData.splice(index, 1);
+            if (manualTargetCompaniesData.length === 0) {
+                manualTargetCompaniesData.push({ name: "", context: "" });
+            }
+            saveManualTargetCompanies();
+            renderManualTargetCompanies();
+        });
+        
+        row.appendChild(nameInput);
+        row.appendChild(contextInput);
+        row.appendChild(delBtn);
+        listEl.appendChild(row);
+    });
+}
+
+function saveManualTargetCompanies() {
+    localStorage.setItem('manualTargetCompaniesData', JSON.stringify(manualTargetCompaniesData));
+}
+
+function loadManualTargetCompanies() {
+    const saved = localStorage.getItem('manualTargetCompaniesData');
+    if (saved) {
+        try {
+            manualTargetCompaniesData = JSON.parse(saved);
+        } catch (e) {}
+    }
+    renderManualTargetCompanies();
+}
+
+const addTargetCompanyBtn = document.getElementById('add-target-company-btn');
+if (addTargetCompanyBtn) {
+    addTargetCompanyBtn.addEventListener('click', () => {
+        manualTargetCompaniesData.push({ name: "", context: "" });
+        saveManualTargetCompanies();
+        renderManualTargetCompanies();
+    });
+}
+
 // --- Format Generator Logic ---
 generateFormatBtn.addEventListener('click', async () => {
     const validItems = formatBuilderData.filter(d => d.name.trim() !== "");
@@ -1800,8 +1893,16 @@ generateFormatBtn.addEventListener('click', async () => {
     const charLimitInput = document.getElementById('manual-char-limit');
     const limit = charLimitInput && charLimitInput.value ? parseInt(charLimitInput.value, 10) : 2000;
     
-    const targetCompaniesInput = document.getElementById('manual-target-companies');
-    const targetCompanies = targetCompaniesInput ? targetCompaniesInput.value.trim() : "";
+    let targetCompaniesFormatted = "";
+    const validTargets = manualTargetCompaniesData.filter(t => t.name.trim() !== "");
+    if (validTargets.length > 0) {
+        validTargets.forEach(t => {
+            targetCompaniesFormatted += `- 企業名: ${t.name}\n`;
+            if (t.context && t.context.trim() !== "") {
+                targetCompaniesFormatted += `  前提条件・備考: ${t.context}\n`;
+            }
+        });
+    }
     
     // Split logic
     const lines = basePrompt.split('\n');
@@ -1834,10 +1935,10 @@ generateFormatBtn.addEventListener('click', async () => {
             finalChunkText += `\n\n【条件分割 ${index + 1}/${chunks.length}】\nまだ回答しないでください。「了解しました」とのみ返答してください。`;
         } else {
             finalChunkText += `\n\n【条件分割 ${index + 1}/${chunks.length}】最後の条件です。\n以上のすべての条件を踏まえて、以下の企業についてウェブ検索等を用いて調査し、指定のフォーマットで出力してください。\n\n`;
-            if (targetCompanies) {
-                finalChunkText += `【対象企業】\n${targetCompanies}`;
+            if (targetCompaniesFormatted) {
+                finalChunkText += `【調査対象企業と個別の前提条件】\n${targetCompaniesFormatted}`;
             } else {
-                finalChunkText += `【対象企業】\n(※ここに企業名を入力してください)`;
+                finalChunkText += `【調査対象企業】\n(※ここに企業名を入力してください)`;
             }
         }
         

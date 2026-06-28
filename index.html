@@ -96,8 +96,11 @@
                         <h4 style="margin-top: 0; margin-bottom: 8px; font-size: 0.95rem;">手動調査用プロンプト生成設定</h4>
                         <div style="display: flex; gap: 16px; align-items: flex-end;">
                             <div style="flex: 1;">
-                                <label style="font-size: 0.85rem; display: block; margin-bottom: 4px;">調査対象の企業名 (自由入力)</label>
-                                <input type="text" id="manual-target-companies" placeholder="例: 株式会社A、株式会社B" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); font-size: 0.9rem;">
+                                <label style="font-size: 0.85rem; display: block; margin-bottom: 4px;">調査対象企業と前提条件・備考（希望職種など）</label>
+                                <div id="manual-target-companies-list" style="display: flex; flex-direction: column; gap: 8px;">
+                                    <!-- JSで動的に入力行が追加されます -->
+                                </div>
+                                <button id="add-target-company-btn" class="btn text" style="padding: 4px 8px; margin-top: 8px; font-size: 0.8rem; border: 1px dashed var(--border-color);">+ 企業を追加</button>
                             </div>
                             <div style="width: 120px;">
                                 <label style="font-size: 0.85rem; display: block; margin-bottom: 4px;">分割文字数</label>
