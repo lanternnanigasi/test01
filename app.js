@@ -171,7 +171,7 @@ const calendarSection = document.getElementById('calendar-section');
 const calendarEl = document.getElementById('calendar');
 
 // Version Check
-console.log("【就活メモ】 アプリバージョン: v1.11.0 (2026-06-28 カスタムプルダウン・企業備考・AI区切り文字対応版)");
+console.log("【就活メモ】 アプリバージョン: v1.12.0 (2026-06-28 企業マスター機能・分割文字数調整対応版)");
 
 // State
 let isSignupMode = false;
